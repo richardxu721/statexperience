@@ -1,0 +1,562 @@
+---
+title: "Stats101C.Homework2"
+author: "Richard Xu - 505682325"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Problem 1
+
+```{r}
+
+library(ggplot2)
+library(knitr)
+library(class)
+
+bc <- read.csv("BCNew.csv")[-1]
+
+```
+
+### a)
+
+Reporting dimensions and summary statistics:
+
+```{r}
+
+dim(bc)
+summary(bc) #figure out how to make nice later
+table(bc$diagnosis)
+
+```
+
+Our data set is 850 observations across 11 variables. 525 have benign breast cancer while 325 have malignant. Though all of the provided data is already means of the patients, we will be reporting the summary statistics of these cumulative means. 
+
+### b)
+
+Plotting density plots of Malignant and Benign:
+
+```{r}
+
+library(gridExtra)
+
+g1 <- ggplot(bc, aes(x=radius_mean, color=diagnosis)) + geom_density() #radius_mean density plot
+g2 <- ggplot(bc, aes(x=texture_mean, color=diagnosis)) + geom_density() #texture_mean density plot
+g3 <- ggplot(bc, aes(x=perimeter_mean, color=diagnosis)) + geom_density() #perimeter_mean density plot
+g4 <- ggplot(bc, aes(x=area_mean, color=diagnosis)) + geom_density() #area_mean density plot
+g5 <- ggplot(bc, aes(x=smoothness_mean, color=diagnosis)) + geom_density() #smoothness_mean density plot
+g6 <- ggplot(bc, aes(x=compactness_mean, color=diagnosis)) + geom_density() #compactness_mean density plot
+g7 <- ggplot(bc, aes(x=concavity_mean, color=diagnosis)) + geom_density() #concavity_mean density plot
+g8 <- ggplot(bc, aes(x=concave.points_mean, color=diagnosis)) + geom_density() #concave.points_mean density plot
+g9 <- ggplot(bc, aes(x=symmetry_mean, color=diagnosis)) + geom_density() #symmetry_mean density plot
+g10 <- ggplot(bc, aes(x=fractal_dimension_mean, color=diagnosis)) + geom_density() #fractal_dimension_mean density plot
+
+grid.arrange(g1,g2,g3,g4,g5,g6,g7,g8,g9,g10, ncol = 3, nrow=4)
+
+```
+Looking at the density plots, the three variables that are deemed "best" are concave.points_mean, area_mean, and concavity_mean since they discriminate the most.
+
+### c)
+
+KNN best predictors:
+
+```{r}
+
+#splitting the dataset
+
+set.seed(113355) #setting random num generator seed
+
+S.Train.i<- sample(1:850, 600, replace = FALSE) #generating 600 numbers from 1 to 850 w/o replacement
+length(S.Train.i)
+
+bc.x <- bc[, c(2,8,9)] #bc with var 2, 8, 9
+bc.x.train <- bc.x[S.Train.i,] #training data set
+dim(bc.x.train)
+
+bc.x.test <- bc.x[-S.Train.i,] #testing data set
+dim(bc.x.test)
+
+bc.y.train <- bc$diagnosis[S.Train.i]
+bc.y.test <- bc$diagnosis[-S.Train.i]
+
+#finding KNN
+
+#k=1
+#146 benign were predicted benign, 10 benign predicted malignant, 93 malignant are malignant, 1 malignant predicted benign
+bc.out.1 <- knn(bc.x.train, bc.x.test, bc.y.train, k=1)
+bc.out.1[1:10]
+length(bc.out.1)
+table(bc.out.1,bc.y.test)
+mean(bc.out.1!=bc.y.test) #misclassification rate
+mean(bc.out.1==bc.y.test)
+
+#k=3
+bc.out.3 <- knn(bc.x.train, bc.x.test, bc.y.train, k=3)
+table(bc.out.3,bc.y.test)
+mean(bc.out.3!=bc.y.test) #misclassification rate
+mean(bc.out.3==bc.y.test)
+
+#k=5
+bc.out.5 <- knn(bc.x.train, bc.x.test, bc.y.train, k=5)
+table(bc.out.5,bc.y.test)
+mean(bc.out.5!=bc.y.test) #misclassification rate
+mean(bc.out.5==bc.y.test)
+
+#k=7
+bc.out.7 <- knn(bc.x.train, bc.x.test, bc.y.train, k=7)
+table(bc.out.7,bc.y.test)
+mean(bc.out.7!=bc.y.test) #misclassification rate
+mean(bc.out.7==bc.y.test)
+
+#k=9
+bc.out.9 <- knn(bc.x.train, bc.x.test, bc.y.train, k=9)
+table(bc.out.9,bc.y.test)
+mean(bc.out.9!=bc.y.test) #misclassification rate
+mean(bc.out.9==bc.y.test)
+
+#k=11
+bc.out.11 <- knn(bc.x.train, bc.x.test, bc.y.train, k=11)
+table(bc.out.11,bc.y.test)
+mean(bc.out.11!=bc.y.test) #misclassification rate
+mean(bc.out.11==bc.y.test)
+
+```
+
+### d)
+
+The best knn model for these three variables is when k=1, as the misclassification rate is 0.044. This is because it had 10 false positives and one false negative.
+
+### e)
+
+Re-creating knn but with scale:
+
+```{r}
+
+bc.s.x <- scale(bc[, c(2,8,9)]) #bc scaled with var 2, 8, 9
+bc.s.x.train <- bc.s.x[S.Train.i,] #training data set
+dim(bc.s.x.train)
+
+bc.s.x.test <- bc.s.x[-S.Train.i,] #testing data set
+dim(bc.s.x.test)
+
+bc.y.train <- bc$diagnosis[S.Train.i] #doesn't change because it is the categorical var we solving for
+bc.y.test <- bc$diagnosis[-S.Train.i]
+
+```
+
+knn models:
+
+```{r}
+
+#k=1
+bc.s.out.1 <- knn(bc.s.x.train, bc.s.x.test, bc.y.train, k=1)
+bc.s.out.1[1:10]
+length(bc.s.out.1)
+table(bc.s.out.1,bc.y.test)
+mean(bc.s.out.1!=bc.y.test) #misclassification rate
+mean(bc.s.out.1==bc.y.test)
+
+#k=3
+bc.s.out.3 <- knn(bc.s.x.train, bc.s.x.test, bc.y.train, k=3)
+table(bc.s.out.3,bc.y.test)
+mean(bc.s.out.3!=bc.y.test) #misclassification rate
+mean(bc.s.out.3==bc.y.test)
+
+#k=5
+bc.s.out.5 <- knn(bc.s.x.train, bc.s.x.test, bc.y.train, k=5)
+table(bc.s.out.5,bc.y.test)
+mean(bc.s.out.5!=bc.y.test) #misclassification rate
+mean(bc.s.out.5==bc.y.test)
+
+#k=7
+bc.s.out.7 <- knn(bc.s.x.train, bc.s.x.test, bc.y.train, k=7)
+table(bc.s.out.7,bc.y.test)
+mean(bc.s.out.7!=bc.y.test) #misclassification rate
+mean(bc.s.out.7==bc.y.test)
+
+#k=9
+bc.s.out.9 <- knn(bc.s.x.train, bc.s.x.test, bc.y.train, k=9)
+table(bc.s.out.9,bc.y.test)
+mean(bc.s.out.9!=bc.y.test) #misclassification rate
+mean(bc.s.out.9==bc.y.test)
+
+#k=11
+bc.s.out.11 <- knn(bc.s.x.train, bc.s.x.test, bc.y.train, k=11)
+table(bc.s.out.11,bc.y.test)
+mean(bc.s.out.11!=bc.y.test) #misclassification rate
+mean(bc.s.out.11==bc.y.test)
+
+```
+
+### f)
+
+The knn model with k=1 is still the best even when scaled. The misclassification rate is lower at 0.04. There are 9 false positives and one false negative. I will note that despite k=1 being the best model still, the other models' misclassification rates have all improved greatly.
+
+# Problem 2
+
+Will repeat Question c through f
+
+### c)
+
+KNN best predictors:
+
+```{r}
+
+#splitting the dataset
+
+set.seed(113355) #setting random num generator seed
+
+S2.Train.i<- sample(1:850, 600, replace = FALSE) #generating 600 numbers from 1 to 850 w/o replacement
+length(S2.Train.i)
+
+bc2.x <- bc[, -1] #bc with all var
+bc2.x.train <- bc2.x[S2.Train.i,] #training data set
+dim(bc2.x.train)
+
+bc2.x.test <- bc2.x[-S2.Train.i,] #testing data set
+dim(bc2.x.test)
+
+bc2.y.train <- bc$diagnosis[S2.Train.i]
+bc2.y.test <- bc$diagnosis[-S2.Train.i]
+
+#finding KNN
+
+#k=1
+bc2.out.1 <- knn(bc2.x.train, bc2.x.test, bc2.y.train, k=1)
+bc2.out.1[1:10]
+length(bc2.out.1)
+table(bc2.out.1,bc2.y.test)
+mean(bc2.out.1!=bc2.y.test) #misclassification rate
+mean(bc2.out.1==bc2.y.test)
+
+#k=3
+bc2.out.3 <- knn(bc2.x.train, bc2.x.test, bc2.y.train, k=3)
+table(bc2.out.3,bc2.y.test)
+mean(bc2.out.3!=bc2.y.test) #misclassification rate
+mean(bc2.out.3==bc2.y.test)
+
+#k=5
+bc2.out.5 <- knn(bc2.x.train, bc2.x.test, bc2.y.train, k=5)
+table(bc2.out.5,bc2.y.test)
+mean(bc2.out.5!=bc2.y.test) #misclassification rate
+mean(bc2.out.5==bc2.y.test)
+
+#k=7
+bc2.out.7 <- knn(bc2.x.train, bc2.x.test, bc2.y.train, k=7)
+table(bc2.out.7,bc2.y.test)
+mean(bc2.out.7!=bc2.y.test) #misclassification rate
+mean(bc2.out.7==bc2.y.test)
+
+#k=9
+bc2.out.9 <- knn(bc2.x.train, bc2.x.test, bc2.y.train, k=9)
+table(bc2.out.9,bc2.y.test)
+mean(bc2.out.9!=bc2.y.test) #misclassification rate
+mean(bc2.out.9==bc2.y.test)
+
+#k=11
+bc2.out.11 <- knn(bc2.x.train, bc2.x.test, bc2.y.train, k=11)
+table(bc2.out.11,bc2.y.test)
+mean(bc2.out.11!=bc2.y.test) #misclassification rate
+mean(bc2.out.11==bc2.y.test)
+
+```
+### d)
+
+The best knn model is when k=1. The misclassification rate is 0.068. There are 16 false positives and one false negative.
+
+### e)
+
+Re-creating knn but with scale:
+
+```{r}
+
+bc2.s.x <- scale(bc[, -1]) #bc scaled with all var
+bc2.s.x.train <- bc2.s.x[S2.Train.i,] #training data set
+dim(bc2.s.x.train)
+
+bc2.s.x.test <- bc2.s.x[-S2.Train.i,] #testing data set
+dim(bc2.s.x.test)
+
+bc2.y.train <- bc$diagnosis[S2.Train.i] #doesn't change because it is the categorical var we solving for
+bc2.y.test <- bc$diagnosis[-S2.Train.i]
+
+```
+
+knn models:
+
+```{r}
+
+#k=1
+bc2.s.out.1 <- knn(bc2.s.x.train, bc2.s.x.test, bc2.y.train, k=1)
+bc2.s.out.1[1:10]
+length(bc2.s.out.1)
+table(bc2.s.out.1,bc2.y.test)
+mean(bc2.s.out.1!=bc2.y.test) #misclassification rate
+mean(bc2.s.out.1==bc2.y.test)
+
+#k=3
+bc2.s.out.3 <- knn(bc2.s.x.train, bc2.s.x.test, bc2.y.train, k=3)
+table(bc2.s.out.3,bc2.y.test)
+mean(bc2.s.out.3!=bc2.y.test) #misclassification rate
+mean(bc2.s.out.3==bc2.y.test)
+
+#k=5
+bc2.s.out.5 <- knn(bc2.s.x.train, bc2.s.x.test, bc2.y.train, k=5)
+table(bc2.s.out.5,bc2.y.test)
+mean(bc2.s.out.5!=bc2.y.test) #misclassification rate
+mean(bc2.s.out.5==bc2.y.test)
+
+#k=7
+bc2.s.out.7 <- knn(bc2.s.x.train, bc2.s.x.test, bc2.y.train, k=7)
+table(bc2.s.out.7,bc2.y.test)
+mean(bc2.s.out.7!=bc2.y.test) #misclassification rate
+mean(bc2.s.out.7==bc2.y.test)
+
+#k=9
+bc2.s.out.9 <- knn(bc2.s.x.train, bc2.s.x.test, bc2.y.train, k=9)
+table(bc2.s.out.9,bc2.y.test)
+mean(bc2.s.out.9!=bc2.y.test) #misclassification rate
+mean(bc2.s.out.9==bc2.y.test)
+
+#k=11
+bc2.s.out.11 <- knn(bc2.s.x.train, bc2.s.x.test, bc2.y.train, k=11)
+table(bc2.s.out.11,bc2.y.test)
+mean(bc2.s.out.11!=bc2.y.test) #misclassification rate
+mean(bc2.s.out.11==bc2.y.test)
+
+```
+
+### f)
+
+The best model is when knn sets k=1. The misclassification rate with the scaled data is 0.024. There are only 6 false positives and no false negatives. Similarly to problem 1, all the other knn models had great improvements in their misclassification rates.
+
+# Problem 3
+
+### a)
+
+```{r}
+
+library(MASS)
+
+#Training and testing of entire dataset
+bc.train <- bc[S.Train.i,]
+dim(bc.train)
+bc.test <- bc[-S.Train.i,]
+dim(bc.test)
+
+#creating the model
+LR1 <- glm(factor(diagnosis)~., family = binomial(), data=bc.train)
+summary(LR1)
+
+# Run the model on the training data set
+train.probs <- predict(LR1, newdata=bc.train, type='response') #need subset to just bc.train
+pred.logit <- rep('M',length(train.probs)) #put B into all of pred.logit
+pred.logit[train.probs<=0.5] <- 'B' #0.5 subsets 1's and 0s. 0 is benign, 1 is malignant
+
+table(pred.logit, bc.train$diagnosis) #confusion matrix
+mean(pred.logit==bc.train$diagnosis)
+mean(pred.logit!=bc.train$diagnosis) #misclassification rate, though there are a lot of false negatives
+
+# Run the model on the testing data set:
+test.probs <- predict(LR1, data=bc, newdata=bc.test, type='response')
+pred.logit2 <- rep('M',length(test.probs))
+pred.logit2[test.probs<=0.5] <- 'B'
+
+table(pred.logit2, bc.test$diagnosis) #confusion matrix
+mean(pred.logit2==bc.test$diagnosis)
+mean(pred.logit2!=bc.test$diagnosis) 
+
+```
+
+For the training data, the confusion matrix has 355 true negatives, 208 true positives, 14 false positives, and 23 false negatives. The misclassification rate for the training is rounded to 0.0617. For the testing data, the confusion matrix has 141 true negatives, 90 true positives, 15 false positives and 4 false negatives. The misclassification rate for the testing data is 0.076.
+
+### b)
+
+Scaling dataset:
+
+```{r}
+
+scale.bc <- data.frame(cbind(bc[, 1], scale(bc[, -1]))) #scaling entire dataset 9
+colnames(scale.bc)[1] <- "diagnosis"
+scale.bc[, -1] <- apply(scale.bc[, -1], 2, as.numeric)
+
+scale.bc.train <- scale.bc[S.Train.i,] #training dataset scaled
+dim(scale.bc.train)
+scale.bc.test <- scale.bc[-S.Train.i,] #testing dataset scaled
+dim(scale.bc.test)
+
+```
+
+```{r}
+
+LR2 <- glm(factor(diagnosis)~., family = binomial(), data=scale.bc.train) #new scaled logistic regression 
+summary(LR2)
+
+```
+
+### c)
+
+Finding confusion matrices:
+
+```{r}
+
+# Run the model on the training data set
+strain.probs <- predict(LR2, newdata=scale.bc.train, type='response')
+spred.logit <- rep('M',length(strain.probs))
+spred.logit[strain.probs<=0.5] <- 'B'
+
+table(spred.logit, scale.bc.train$diagnosis) #confusion matrix
+mean(spred.logit==scale.bc.train$diagnosis)
+mean(spred.logit!=scale.bc.train$diagnosis)
+
+# Run the model on the testing data set:
+stest.probs <- predict(LR2, data=scale.bc, newdata=scale.bc.test, type='response')
+spred.logit2 <- rep('M',length(stest.probs))
+spred.logit2[stest.probs<=0.5] <- 'B'
+
+table(spred.logit2, scale.bc.test$diagnosis) #confusion matrix
+mean(spred.logit2==scale.bc.test$diagnosis)
+mean(spred.logit2!=scale.bc.test$diagnosis)
+
+```
+
+For the training data, the confusion matrix has 355 true negatives, 208 true positives, 14 false positives, and 23 false negatives. The misclassification rate for the training is rounded to 0.0617. For the testing data, the confusion matrix has 141 true negatives, 90 true positives, 15 false positives and 4 false negatives. The misclassification rate for the testing data is 0.076. The misclassification rates are the same regardless of scaling for logistic models!
+
+# Problem 4
+
+Our best model would be the scaled knn model with k=1. It has the lowest misclassification rate at 0.024. I would also argue that it is the best because it has 0 false positives compared to most of the other models. It's my hero!
+
+# Problem 5
+
+```{r}
+
+bos <- read.csv("boston.csv")
+dim(bos)
+
+median(bos$crim) #median of crime rate is 0.25651
+bos$crime_rate <- ifelse(bos$crim >= 0.25651, "T", "F") #T = above, F = below
+
+#Splitting dataset
+
+library(caTools)
+
+set.seed(113355)
+split = sample.split(bos$crim, SplitRatio = 0.70)
+bos <- bos[, -1]
+bos.train = subset(bos, split == TRUE)
+bos.test = subset(bos, split == FALSE)
+
+```
+
+### Creating Logistical Models
+
+```{r}
+
+#regress everything
+LRb1 <- glm(factor(crime_rate)~., data = bos.train, family = binomial)
+summary(LRb1) #pick the lowest p-values for your vars as a guideline, drop lowest
+
+#running model 1 on testing data
+btest.probs <- predict(LRb1, newdata=bos.test, type='response')
+bpred.logit <- rep('T',length(btest.probs))
+bpred.logit[btest.probs<=0.5] <- 'F'
+table(bpred.logit, bos.test$crime_rate) #confusion matrix
+mean(bpred.logit!=bos.test$crime_rate)
+
+```
+
+```{r}
+
+#the five best variables are nox, rad, dis, ptratio, medv
+LRb2 <- glm(factor(crime_rate)~nox+rad+dis+ptratio+medv, data = bos.train, family = binomial)
+summary(LRb2) #5-variable model
+
+#running model on testing data
+btest.probs2 <- predict(LRb2, newdata=bos.test, type='response')
+bpred.logit2 <- rep('T',length(btest.probs2))
+bpred.logit2[btest.probs2<=0.5] <- 'F'
+table(bpred.logit2, bos.test$crime_rate) #confusion matrix
+mean(bpred.logit2!=bos.test$crime_rate)
+
+```
+
+```{r}
+
+#the four best variables are nox, rad, ptratio, medv
+LRb3 <- glm(factor(crime_rate)~nox+rad+ptratio+medv, data = bos.train, family = binomial) 
+summary(LRb3) #4-variable model
+
+#running model on testing data
+btest.probs3 <- predict(LRb3, newdata=bos.test, type='response')
+bpred.logit3 <- rep('T',length(btest.probs3))
+bpred.logit3[btest.probs3<=0.5] <- 'F'
+table(bpred.logit3, bos.test$crime_rate) #confusion matrix
+mean(bpred.logit3!=bos.test$crime_rate)
+
+```
+
+```{r}
+
+#the three best variables are nox, rad, and ptratio
+LRb4 <- glm(factor(crime_rate)~nox+rad+ptratio, data = bos.train, family = binomial) 
+summary(LRb4) #3-variable model
+
+#running model on testing data
+btest.probs4 <- predict(LRb4, newdata=bos.test, type='response')
+bpred.logit4 <- rep('T',length(btest.probs4))
+bpred.logit4[btest.probs4<=0.5] <- 'F'
+table(bpred.logit4, bos.test$crime_rate) #confusion matrix
+mean(bpred.logit4!=bos.test$crime_rate)
+
+```
+
+The best logistic regression model uses the three variables nox, rad, and ptratio. I started by regressing all the variables against the new factor variable crim_rate. I then chose the best 5 variables via lowest p-value to find the best 5-variable predictor model. This gave me a model with variables nox, rad, dis, ptratio, and medv. I then looked at that model's p-values and determined to drop dis due to its high p-value. This led me to a 4-variable model with nox, rad, ptratio, and medv. Finally, I dropped medv due to its higher p-value to find the best 3-variable model with nox, rad, and ptratio.
+
+### Creating KNN Models (scale the df)
+
+```{r}
+
+#scaling the dataset
+
+sbos <- bos
+sbos[1:13] <- scale(sbos[1:13])
+sbos.train = subset(sbos, split == TRUE)
+sbos.test = subset(sbos, split == FALSE)
+
+#knn for k=1
+sbos.out.1 <- knn(sbos.train[,-14], sbos.test[,-14], sbos.train$crime_rate, k=1)
+table(sbos.out.1, sbos.test$crime_rate)
+mean(sbos.out.1!=sbos.test$crime_rate) #misclassification rate
+
+#knn for k=3
+sbos.out.3 <- knn(sbos.train[,-14], sbos.test[,-14], sbos.train$crime_rate, k=3)
+table(sbos.out.3, sbos.test$crime_rate)
+mean(sbos.out.3!=sbos.test$crime_rate) #misclassification rate
+
+#knn for k=5
+sbos.out.5 <- knn(sbos.train[,-14], sbos.test[,-14], sbos.train$crime_rate, k=5)
+table(sbos.out.5, sbos.test$crime_rate)
+mean(sbos.out.5!=sbos.test$crime_rate) #misclassification rate
+
+#knn for k=7
+sbos.out.7 <- knn(sbos.train[,-14], sbos.test[,-14], sbos.train$crime_rate, k=7)
+table(sbos.out.7, sbos.test$crime_rate)
+mean(sbos.out.7!=sbos.test$crime_rate) #misclassification rate
+
+#knn for k=9
+sbos.out.9 <- knn(sbos.train[,-14], sbos.test[,-14], sbos.train$crime_rate, k=9)
+table(sbos.out.9, sbos.test$crime_rate)
+mean(sbos.out.9!=sbos.test$crime_rate) #misclassification rate
+
+#knn for k=11
+sbos.out.11 <- knn(sbos.train[,-14], sbos.test[,-14], sbos.train$crime_rate, k=11)
+table(sbos.out.11, sbos.test$crime_rate)
+mean(sbos.out.11!=sbos.test$crime_rate) #misclassification rate
+
+```
+The model with the lowest misclassification rate is the logistic model with all the variables with a rate of 0.06578947. It has 70 correct predictions of crime_rate being false, 72 correct predicitons of crime_rate being true, 1 true prediction when it was actually false and 9 false predictions when it was actually true.
+
+

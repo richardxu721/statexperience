@@ -1,0 +1,275 @@
+---
+title: "Stats101C Hmwk3"
+author: "Richard Xu - 505682325"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Problem 1
+
+### a)
+
+```{r}
+
+#importing the train and testing datasets
+wine.train <- read.csv("WineTrain.csv")[,-1]
+wine.test <- read.csv("WineTest.csv")[,-1]
+
+#checking what R sees column variables as:
+str(wine.train)
+str(wine.test)
+
+#convert to factors
+wine.train$Wine.Color <- as.factor(wine.train$Wine.Color)
+wine.train$Class <- as.factor(wine.train$Class)
+
+wine.test$Wine.Color <- as.factor(wine.test$Wine.Color)
+wine.test$Class <- as.factor(wine.test$Class)
+
+```
+
+Making our logistic model:
+
+```{r}
+
+LR1 <- glm(Class~., family = binomial(), data=wine.train)
+summary(LR1)
+
+#making our confusion matrices / error rates on training dataset
+test.probs <- predict(LR1, data=wine.train, newdata=wine.train, type='response')
+pred.logit <- rep('Good',length(test.probs))
+pred.logit[test.probs<=0.5] <- 'Bad'
+
+table(pred.logit, wine.train$Class)
+mean(pred.logit==wine.train$Class)
+mean(pred.logit!=wine.train$Class) #error rate 
+
+#making our confusion matrices / error rates on testing dataset
+test.probs2 <- predict(LR1, data=wine.train, newdata=wine.test, type='response')
+pred.logit2 <- rep('Good',length(test.probs2))
+pred.logit2[test.probs2<=0.5] <- 'Bad'
+
+table(pred.logit2, wine.test$Class)
+mean(pred.logit2==wine.test$Class)
+mean(pred.logit2!=wine.test$Class) #error rate 
+
+```
+
+Our logistic model has a 0.3475 error rate on the testing dataset. The confusion matrix has 427 true negatives, 356 true positives, 205 false positives, and 212 false negatives.
+
+### b)
+
+LDA Model creation:
+
+```{r}
+
+library(MASS)
+
+#creating the lda model
+wine.lda <- lda(Class~., data=wine.train)
+wine.lda
+
+```
+
+Analyzing Performance:
+
+```{r}
+
+#predicting for training set
+wine.predict <- predict(wine.lda, wine.train[,-13])
+wine.classify <- wine.predict$class
+wine.classperc <- sum(wine.classify==wine.train[,13])/2800
+table(wine.classify, wine.train$Class) #confusion matrix
+wine.classperc #correct prediction rate
+1 - wine.classperc #error rate
+
+#predicting for testing set
+winet.predict <- predict(wine.lda, wine.test[,-13])
+winet.classify <- winet.predict$class
+winet.classperc <- sum(winet.classify==wine.test[,13])/1200
+table(winet.classify, wine.test$Class) #confusion matrix
+winet.classperc #correct prediction rate
+1 - winet.classperc #error rate
+
+```
+
+Our lda model has a 0.3491667 error rate on the testing dataset. The confusion matrix has 428 true negatives, 353 true positives, 204 false positives, and 215 false negatives.
+
+### c)
+
+Making a QDA model:
+
+```{r}
+
+wine.qda <- qda(Class~., data=wine.train)
+wine.qda
+
+```
+
+Analyzing Performance:
+
+```{r}
+
+#on the training data
+p.qda.cl <- predict(wine.qda, wine.train[,-13])$class
+table(p.qda.cl, wine.train$Class) #confusion matrix
+mean(p.qda.cl==wine.train$Class) #correct prediction rate
+mean(p.qda.cl!=wine.train$Class) #error rate
+
+#on the testing data
+p.qda.cl2 <- predict(wine.qda, wine.test[,-13])$class
+table(p.qda.cl2, wine.test$Class) #confusion matrix
+mean(p.qda.cl2==wine.test$Class) #correct prediction rate
+mean(p.qda.cl2!=wine.test$Class) #error rate
+
+```
+
+Our qda model has a 0.3816667 error rate on the testing dataset. The confusion matrix has 318 true negatives, 424 true positives, 314 false positives, and 144 false negatives.
+
+### d)
+
+Making a knn model with k=25:
+
+```{r}
+
+library(class)
+
+#scaling our dataset
+wine.train[, 2:12] <- scale(wine.train[, 2:12])
+wine.test[, 2:12] <- scale(wine.test[, 2:12])
+
+km25 <- knn(wine.train[,2:12], wine.test[,2:12], wine.train[,13], k=25)
+table(km25, wine.test[,13])
+mean(km25==wine.test[,13])
+mean(km25!=wine.test[,13]) #misclassification rate
+
+```
+Our knn model with k=25 has a 0.35 error rate on the testing dataset. The confusion matrix has 4011 true negatives, 369 true positives, 221 false positives, and 199 false negatives.
+
+### e)
+
+Our best model is the logistic model with all predictors, followed by the LDA model, the knn model with k=25, then finally the QDA model. The error rates are 0.3475, 0.3491667, 0.35, and 0.3816667 respectively.  
+
+# Question 2
+
+```{r}
+
+#importing dataset
+olives <- read.csv("Olives.csv")[,c(-1,-3)] #region/column 1 is the response variable
+
+#making sure region is a factor
+olives$region<- as.factor(olives$region)
+
+#splitting into training and testing data
+set.seed(1234567)
+i = 1:dim(olives)[1]
+i.train <- sample(i,400,replace=FALSE) #training is 400, testing is 172
+o.train = olives[i.train, ]
+o.test = olives[-i.train, ]
+
+```
+
+### a)
+
+Naive Bayes Classifier:
+
+```{r}
+
+library(e1071)
+
+#making the classifier
+olives.nb <- naiveBayes(region~., data=o.train)
+olives.nb
+
+p.nb <- predict(olives.nb, newdata=o.test)
+table(p.nb, o.test$region) #confusion matrix
+mean(p.nb==o.test$region) #correct prediction rate
+mean(p.nb!=o.test$region) #error rate
+
+```
+When testing our Naive Bayes Classifier on our testing data we get an error rate of 0.06395349. 83 of true 1's are correctly predicted as 1. 26 of true 2's are correctly predicted as 2. 52 of true 3's are correctly predicted as 3. However, 11 of true 1's are predicted as 3's.
+
+### b)
+
+Creating a LDA model:
+
+```{r}
+
+#creating the model
+olives.lda <- lda(region~., data=o.train)
+olives.lda
+
+#testing the model on testing data
+olives.predict <- predict(olives.lda, newdata=o.test)
+olives.classify <- olives.predict$class
+olives.classperc <- sum(olives.classify==o.test[,1])/172 #correct classification rate
+table(olives.classify, o.test[,1]) #confusion matrix
+olives.classperc
+1 - olives.classperc #error rate
+
+```
+
+When testing our LDA model on our testing data we get an error rate of 0.01162791. 94 of true 1's are correctly predicted as 1. 26 of true 2's are correctly predicted as 2. 50 of true 3's are correctly predicted as 3. However, 2 of true 3's are classified as 2's.
+
+### c)
+
+The proportion of trace for LD1 and LD2 are 0.7778 and 0.2222 respectively.
+
+### d)
+
+Plotting LD1 vs. LD2:
+
+```{r}
+
+# Ploting LD1 vs LD2:
+
+library(ggplot2)
+
+LD1 <- predict(olives.lda)$x[,1]
+LD2 <- predict(olives.lda)$x[,2] 
+
+qplot(x = LD1, y = LD2, color = o.train$region, shape = o.train$region, main="LDA1 vs LDA2 for the Three Regions")+xlab("LD1")+ylab("LD2")
+
+#centroids per region
+
+centroids <- aggregate(data=o.train,cbind(LD1,LD2)~region,mean)
+
+#replotting with the group centroids
+
+cenplot <- ggplot(data=o.train, aes(LD1,LD2,color=region,shape=region)) + geom_point()
+cenplot+ggtitle("LDA1 vs LDA2 for the three regions")+geom_point(size=1)+geom_point(data=centroids,size=4, color="black")
+
+```
+
+### e)
+
+Creating a QDA model:
+
+```{r}
+
+olives.qda <- qda(region~., data=o.train)
+olives.qda
+
+#testing the model on testing data
+p.o.qda <- predict(olives.qda, o.test[,-1])$class
+table(p.o.qda, o.test$region) #confusion matrix
+mean(p.o.qda==o.test$region) #correct prediction rate
+mean(p.o.qda!=o.test$region) #error rate
+
+```
+The qda model has a 0% error rate on the testing data. 94 true 1's are predicted as 1. 26 true 2's are predicted as 2. 52 true 3's are predicted as 3.
+
+### f)
+
+Summary:
+
+```{r}
+
+summary(olives.qda)
+
+```
+

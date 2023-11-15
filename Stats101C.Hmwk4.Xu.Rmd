@@ -1,0 +1,497 @@
+---
+title: "Stats101C Hmwk 4"
+author: "Richard Xu - 505682325"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Problem 1
+
+### a)
+
+```{r}
+
+library(ggplot2)
+library(gridExtra)
+library(knitr)
+library(car)
+library(MASS)
+library(class)
+
+train <- read.csv("TrainSAData2.csv")[, -1]
+test <- read.csv("TestSAData2NoY.csv")[, -1]
+
+#checking dimensions
+dim(train)
+dim(test)
+
+```
+The training dataset is 70000 observations and 27 variables. The testing dataset is 30000 observations and 26 variables.
+
+### b)
+
+There are 20 numeric variables. These are: age, height, weight, waistline, sight_left, sight_right, SBP, DBP, BLDS, tot_chole, HDL_chole, LDL_chole, triglyceride, hemoglobin, serum_creatine, SGOT_AST, SGOT_ALT, gamma_GTP, BMI, and urine_protein. 
+
+### c)
+
+There are 7 categorical variables. These are: sex, hear_left, hear_right, BMI.Category, AGE.Category, Smoking.Status, and Alcoholic.Status.
+
+### d) #mable kable this to make nicer
+
+```{r}
+
+#training missing frequency and proportions
+train_miss_freq <- colSums(is.na(train))
+train_miss_prop <- colSums(is.na(train)) / nrow(train)
+train_miss_freq
+train_miss_prop
+
+#testing missing frequency and proportions
+test_miss_freq <- colSums(is.na(test))
+test_miss_prop <- colSums(is.na(test)) / nrow(test)
+test_miss_freq
+test_miss_prop
+
+```
+
+
+### e) how do we do this for testing too
+
+```{r}
+
+#train frequency and proportions
+train_freq <- table(train$Alcoholic.Status)
+train_freq #frequency
+train_prop <- prop.table(train_freq) 
+train_prop #proportions
+
+1 - max(train_prop) #max error rate based on the training data
+
+```
+The maximum error rate is 0.4983857.
+
+### f)
+
+```{r}
+
+#create model with all regressors first to know which is best
+# LOOKING BACK: did I need to do this
+
+m1 <- glm(data = train, factor(Alcoholic.Status)~., family = binomial())
+summary(m1)
+
+```
+After looking at all the density plots, the best variables are hemoglobin, BMI, age, and gamma_GTP.
+
+```{r}
+
+#density plots
+g1 <- ggplot(train, aes(x=hemoglobin, color=Alcoholic.Status)) + geom_density() #hemoglobin density plot
+g2 <- ggplot(train, aes(x=BMI, color=Alcoholic.Status)) + geom_density() #bmi density plot
+g3 <- ggplot(train, aes(x=age, color=Alcoholic.Status)) + geom_density() #age density plot
+g4 <- ggplot(train, aes(x=gamma_GTP, color=Alcoholic.Status)) + geom_density() #gamma_GTP density plot
+
+grid.arrange(g1,g2,g3,g4)
+
+```
+
+### g)
+
+```{r}
+
+#stacked bar charts
+b1 <- ggplot(train, aes(x = sex, fill = Alcoholic.Status)) + geom_bar() #sex stacked bar chart 
+b2 <- ggplot(train, aes(x = Smoking.Status, fill = Alcoholic.Status)) + geom_bar() #smoking status stacked bar
+
+b1
+b2
+
+```
+
+# Problem 2
+
+### a)
+
+I want to create a logistic model with the best variables I've chosen to start:
+
+```{r}
+
+#data cleaning
+train2 <- train
+test2 <- test
+
+#mean implementation
+#train
+for(i in c(2,3,4,5,6,7,10,11,12,13,14,15,16,17,18,19,20,21,22,23)){
+train2[, i][is.na(train2[, i])] <- mean(train2[, i], na.rm = TRUE)
+}
+#test
+for(i in c(2,3,4,5,6,7,10,11,12,13,14,15,16,17,18,19,20,21,22,23)){
+test2[, i][is.na(test2[, i])] <- mean(test2[, i], na.rm = TRUE)
+}
+
+#mode implementation
+mode_func <- function(x) {
+  uniq_x <- unique(x)
+  uniq_x[which.max(tabulate(match(x, uniq_x)))]
+}
+
+#train
+for(i in c(1,8,9,24,25,26,27)){
+  train2[, i][is.na(train2[, i])] <- mode_func(train2[, i])
+}
+#test
+for(i in c(1,8,9,24,25,26)){
+  test2[, i][is.na(test2[, i])] <- mode_func(test2[, i])
+}
+
+```
+
+
+```{r}
+
+vif(m1) #checking for collinearity of og model
+
+#logistic model 1
+LR1 <- glm(data=train, factor(Alcoholic.Status)~age+BMI+sex+gamma_GTP+Smoking.Status+hemoglobin, family = binomial())
+
+summary(LR1)
+
+#logistic model 2
+LR2 <- glm(data=train2, factor(Alcoholic.Status)~age+BMI+sex+gamma_GTP+Smoking.Status+hemoglobin, family = binomial())
+
+summary(LR2)
+
+#logistic model 3
+LR3 <- glm(data=train2, factor(Alcoholic.Status)~., family = binomial())
+
+summary(LR3)
+
+#knn model without removing any variables yet
+# s.train <- train2
+# s.train[, -c(1,8,9,24,25,26,27)] <- scale(train2[, -c(1,8,9,24,25,26,27)])
+# 
+# s.test <- test2
+# s.test[, -c(1,8,9,24,25,26)] <- scale(test2[, -c(1,8,9,24,25,26)])
+# 
+# 
+# km1.1 <- knn(s.train[, -27], s.test, s.train$Alcoholic.Status, k=1)
+# length(km1.1)
+# table(bc2.s.out.1,bc2.y.test)
+# mean(bc2.s.out.1!=bc2.y.test) #misclassification rate
+# mean(bc2.s.out.1==bc2.y.test)
+
+```
+
+### b)
+
+Reminder that the max error rate is 0.4983857.
+
+```{r}
+
+# Run the model on the training data set:
+train.probs <- predict(LR1, newdata=train, type='response')
+pred.logit <- rep('Y',length(train.probs))
+pred.logit[train.probs<=0.5] <- 'N'
+
+table(pred.logit, train$Alcoholic.Status) #confusion matrix
+mean(pred.logit==train$Alcoholic.Status)
+mean(pred.logit!=train$Alcoholic.Status) 
+
+# Run the model on the training data set 2:
+train2.probs <- predict(LR2, newdata=train2, type='response')
+pred2.logit <- rep('Y',length(train2.probs))
+pred2.logit[train2.probs<=0.5] <- 'N'
+
+table(pred2.logit, train2$Alcoholic.Status) #confusion matrix
+mean(pred2.logit==train2$Alcoholic.Status)
+mean(pred2.logit!=train2$Alcoholic.Status) 
+
+# Run the model on the training data set 3:
+train3.probs <- predict(LR3, newdata=train2, type='response')
+pred3.logit <- rep('Y',length(train3.probs))
+pred3.logit[train3.probs<=0.5] <- 'N'
+
+table(pred3.logit, train2$Alcoholic.Status) #confusion matrix
+mean(pred3.logit==train2$Alcoholic.Status)
+mean(pred3.logit!=train2$Alcoholic.Status) 
+
+```
+
+### c) 
+
+```{r}
+
+#training data set
+testLR1.prob <- predict(LR1, data=train, newdata=test, type='response')
+
+head(testLR1.prob) #why are there NAs
+length(testLR1.prob)
+
+testLR1.pred <- rep("N", 30000)
+testLR1.pred[testLR1.prob>0.5] <- "Y"
+table(testLR1.pred)
+
+#write the csv
+write.csv(data.frame("ID"=c(1:30000), "Alcoholic.Status"=testLR1.pred), row.names = FALSE, file = "C:/Users/richa/Documents/Stats101C Resources/testLR1.csv")
+
+```
+
+```{r}
+
+#training data set 2 
+testLR2.prob <- predict(LR2, data=train2, newdata=test, type='response')
+
+head(testLR2.prob) #why are there NAs
+length(testLR2.prob)
+
+testLR2.pred <- rep("N", 30000)
+testLR2.pred[testLR2.prob>0.5] <- "Y"
+table(testLR2.pred)
+
+#write the csv
+write.csv(data.frame("ID"=c(1:30000), "Alcoholic.Status"=testLR2.pred), row.names = FALSE, file = "C:/Users/richa/Documents/Stats101C Resources/testLR2.csv")
+
+```
+
+```{r}
+
+#training data set 2 with test 2 
+testLR2t2.prob <- predict(LR2, data=train2, newdata=test2, type='response')
+
+head(testLR2t2.prob) #why are there NAs
+length(testLR2t2.prob)
+
+testLR2t2.pred <- rep("N", 30000)
+testLR2t2.pred[testLR2t2.prob>0.5] <- "Y"
+table(testLR2t2.pred)
+
+#write the csv
+write.csv(data.frame("ID"=c(1:30000), "Alcoholic.Status"=testLR2t2.pred), row.names = FALSE, file = "C:/Users/richa/Documents/Stats101C Resources/testLR2t2.csv")
+
+```
+
+```{r}
+
+#training data set 2 with test 3
+testLR3t2.prob <- predict(LR3, data=train2, newdata=test2, type='response')
+
+head(testLR3t2.prob) #why are there NAs
+length(testLR3t2.prob)
+
+testLR3t2.pred <- rep("N", 30000)
+testLR3t2.pred[testLR3t2.prob>0.5] <- "Y"
+table(testLR3t2.pred)
+
+#write the csv
+write.csv(data.frame("ID"=c(1:30000), "Alcoholic.Status"=testLR3t2.pred), row.names = FALSE, file = "C:/Users/richa/Documents/Stats101C Resources/testLR3t2.csv")
+
+```
+
+# Problem 3
+
+### a)
+
+```{r}
+
+wine.train <- read.csv("WineTrain.csv")
+wine.test <- read.csv("WineTest.csv")
+wine <- rbind(wine.train, wine.test)[, -1] #combine dataframe
+
+```
+
+Logistic Regression with LOOCV:
+
+```{r}
+
+library(caret)
+library(crossval)
+library(boot)
+
+cost <- function(r, pi = 0) mean(abs(r-pi) > 0.5)
+
+wm1 <- glm(data = wine, factor(Class)~., family=binomial())
+summary(wm1)
+
+cv.wm1.out1 <- cv.glm(wine, wm1, cost) #loocv or k=1 is the default for cv.glm
+cv.wm1.err <- cv.wm1.out1$delta # this is the average MSE/error rate
+cv.wm1.err
+
+```
+
+According to glm.cv, the logistic regression delta/MSE/error rate is around 0.3602500.
+
+### b)
+
+Creating an LDA model with LOOCV.
+
+```{r}
+
+lda.LOOCV <- lda(data=wine, Class~., CV = TRUE)
+summary(lda.LOOCV)
+lda.LOOCV$class[1:10]
+length(lda.LOOCV$class)
+
+table(lda.LOOCV$class,wine$Class) #confusion matrix
+mean(lda.LOOCV$class!=wine$Class) #error rate
+
+```
+With an error rate of 0.36175 there are 1374 true negatives, 1179 true positives, 676 false positives, and 771 false negatives.
+
+### c)
+
+Making a QDA model with LOOCV:
+
+```{r}
+
+qda.LOOCV <- qda(data=wine, Class~., CV = TRUE)
+summary(qda.LOOCV)
+qda.LOOCV$class[1:10]
+length(qda.LOOCV$class)
+
+
+table(qda.LOOCV$class,wine$Class)
+mean(qda.LOOCV$class!=wine$Class)
+
+```
+The QDA with LOOCV model has an error rate of 0.37275. There are 1058 true negatives, 1451 true positives, 992 false positives, and 499 false negatives.
+
+### d)
+
+```{r}
+
+s.wine <- wine
+s.wine[, c(-1,-13)] <- scale(wine[, c(-1,-13)])
+s.wine$Wine.Color <- as.factor(s.wine$Wine.Color)
+s.wine$Class <- as.factor(s.wine$Class)
+
+s.wine$Wine.Color <- ifelse(s.wine$Wine.Color == 'R', 1, 0) #if its red = 1, white = 0
+
+knn.LOOCV <- knn.cv(train = s.wine[,-13], cl = s.wine$Class, k=25)
+table(knn.LOOCV, s.wine[,13])
+mean(knn.LOOCV!=wine[,13])
+
+```
+With an error rate of 0.34825 the KNN model with LOOCV gets 1353 true negatives, 1254 true positives, 697 false positives, and 696 false negatives.
+
+### e)
+
+The model with the lowest error rate is the knn with LOOCV model with only 0.34825.
+
+# Problem 4
+
+### a)
+
+Logistic Regression with CV 10-fold method:
+
+```{r}
+
+cost <- function(r, pi = 0) mean(abs(r-pi) > 0.5)
+
+wm2 <- glm(data = wine, factor(Class)~., family=binomial())
+summary(wm2)
+
+cv.wm2.out1 <- cv.glm(wine, wm2, cost, K = 10)
+cv.wm2.out1
+cv.wm2.err <- cv.wm2.out1$delta # this is the average MSE/error rate
+cv.wm2.err
+
+```
+According to glm.cv, the logistic regression delta/MSE/error rate is around 0.36025.
+
+### b)
+
+Creating an LDA model with CV 10-fold method.
+
+```{r}
+
+wine$Wine.Color <- as.factor(wine$Wine.Color)
+wine$Class <- as.factor(wine$Class)
+wine$Wine.Color <- ifelse(wine$Wine.Color == 'R', 1, 0) #if its red = 1, white = 0
+wine$Class <- ifelse(wine$Class == 'Good', 1, 0) #if its good = 1, bad = 0
+wine$Class <- as.factor(wine$Class)
+
+#prediction function
+predfun.lda = function(train.x, train.y, test.x, test.y, negative)
+{
+  require("MASS") # for lda function
+  lda.fit = lda(train.x, grouping=train.y)
+  ynew = predict(lda.fit, test.x)$class
+  # count TP, FP etc.
+  out = confusionMatrix(test.y, ynew, negative=negative)
+  return(out)
+}
+
+#prediction
+X = as.matrix(wine[, 1:12, drop=FALSE])
+Y = wine[,13] 
+cv.out <- crossval(predfun.lda, X, Y, K=10, B=20, negative="0") #20 more times is good negative argument is equal to the negative outcome aka bad here
+cv.out #$stat gives true/false positive negative stats
+
+cv.out$stat #confusion matrix numbers
+diagnosticErrors(cv.out$stat) #accuracy is 0.6399500
+1 - 0.6399500
+
+
+```
+If the accuracy is 0.6399500 for the LDA 10 K-fold model then the 0.36005 is the error rate. The $stat argument states that there are (assuming these are averages) 67.39 false positives, 118.37 true positives, 137.61 true negatives, and 76.63 false negatives.
+
+### c)
+
+Creating an QDA model with CV 10-fold method.
+
+```{r}
+
+predfun.qda = function(train.x, train.y, test.x, test.y, negative)
+{
+  require("MASS") # for qda function
+  qda.fit = qda(train.x, grouping=train.y)
+  ynew = predict(qda.fit, test.x)$class
+  # count TP, FP etc.
+  out = confusionMatrix(test.y, ynew, negative=negative)
+  return( out )
+}
+
+#prediction
+X = as.matrix(wine[, 1:12, drop=FALSE])
+Y = wine[,13] 
+cv.out2 <- crossval(predfun.qda, X, Y, K=10, B=20, negative="0") 
+cv.out2 
+
+cv.out2$stat 
+diagnosticErrors(cv.out2$stat) 
+1 - 0.6242000
+
+```
+If the accuracy is 0.6242000 for the QDA 10 K-fold model then the 0.3758 is the error rate. The $stat argument states that there are (assuming these are averages) 99.97 false positives, 144.65 true positives, 105.03 true negatives, and 50.35 false negatives.
+
+### d)
+
+Making a knn model, k=25, with 10-fold CV
+
+```{r}
+
+#use s.wine again
+
+library(Rfast)
+library(Rcpp)
+
+x <- as.matrix(s.wine[, -13])
+y <- s.wine[, 13]
+knn.10f <- knn.cv(folds = NULL, nfolds = 10, stratified = TRUE, seed = FALSE, y = y, x = x, 
+              k = 25, dist.type = "euclidean", type = "C", method = "average", 
+              freq.option = 0, pred.ret = FALSE, mem.eff = FALSE) 
+knn.10f.acc <- knn.10f$crit
+knn.10f.err <- 1-knn.10f.acc
+knn.10f.err
+
+```
+The error rate is 0.343 for the knn model with k=25 with 10-fold CV.
+
+### e)
+
+The best model is the knn model with k=25 utilizing 10-fold CV.

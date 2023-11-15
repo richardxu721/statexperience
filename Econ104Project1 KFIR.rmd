@@ -1,0 +1,377 @@
+---
+title: "Econ104 - Project1"
+author: "Justin Huang, Kfir Mualem, Richard Xu"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Problem 1
+
+In our model, we are trying to predict the house price of unit area via the impact of different variables such as transaction date, house age, distance to the nearest MRT station, number of convenience stores in the area, latitude, and longtitude. 
+
+# Problem 2
+
+## a) 
+
+The data set citation is: Algor, B. (2019). Real estate price prediction[Data set]. Kaggle. Retreived from https://www.kaggle.com/datasets/quantbruce/real-estate-price-prediction 
+
+
+## b)
+
+The data set shows the house prices of unit per area from the years 2012-2014, based on different independent variables, such as transaction date, house age, distance to the nearest MRT station, number of convenience stores in the area, latitude and longitude. These are represented by the variables: unitprice, txndate, age, mrtdistance, storenum, latitude, and longitude respectively.
+
+## c)
+
+```{r}
+
+library(AER)
+library(corrplot)
+library(knitr)
+library(broom)
+library(car)
+library(jtools)
+library(leaps)
+library(HH)
+library(sandwich)
+library(lmtest)
+
+estate <- read.csv("Real estate.csv", header = TRUE)
+estate <- estate[, -1] #First column is just the row numbers
+names(estate) <- c("txndate", "age", "mrtdistance", "storenum", "latitude", "longitude", "unitprice")
+
+```
+
+### Histograms of Variables
+
+```{r}
+
+par(mfrow = c(2, 2))
+
+for(i in seq_along(estate)){
+  hist(estate[, i], freq = FALSE, main = c("Histogram of ", names(estate)[i]), xlab = names(estate)[i])
+  lines(density(estate[, i]), lwd = 2)
+}
+
+```
+
+txndate: shows a well distributed skewed left distribution with most data is appears to be in the the first half of 2013. this skewed left shows us that most of the transactions occured at 2013. In the boxplots we have no residuals and most of our data is in the range towards the end of 2012 and 2013.
+
+age: shows us the age of the house house in the transaction, the distribution we have here is multimodel distribution. Shows us that there are two main groups of ages of house that has been in the transaction, Most of the house that has been traded at the age of 10-20 years. The second largest group of houses that has been traded are between 30-35 years. According to the boxplots we don't have any residuals.
+
+mrtdistance: shows us the distance of the house to the mrt(transportation) stations. It is a skewed right distribution that shows our peak of data is between 0-500 units from the public transportation. After the 3000 unit distance from transportation not many houses has been sold. The box plot shows many outliers that appear after the 3000 feet distance which can also be seen in the histogram that we have. 
+
+storenum: shows us the number of convenience stores that are near the house that has been traded. It almost has uniform distribution but it seems more like skewed right distribution. Many of the houses that has been traded have zero stores near them. The rest of the houses which have been traded, were pretty much equally distributed from 1 store nearby to 8 stores nearby. According to the boxplots we didn't have any outliers in our data set. 
+
+latitude: shows the coordinate of the house on the globe. We can see that most of our data is centered around 24.9, with very few residuals.
+      
+longitude: shows the coordinate of the house on the globe. Longitude has a skewed left distribution. The bulk of our data is on the right side with the higher values of longitude showing that most of our data was collected around longitude of 121. According to box-plots we have many residuals below 121. Because of the skewed left distribution our mean is less than the median. 
+     
+unitprice: unit price shows us the price per square unit, we can see that this distribution is skewed right since most of our data is on the left side of the distribution located at the price range of around 30-60 dollars per square unit. Because of the skewed right distribution, the mean is higher than the median. We have very low outliers in this variables. 
+      
+### Correlation Matrix
+
+```{r}
+
+cor_matrix <- cor(estate)
+kable(cor_matrix, digits = 4)
+pairs(estate)
+corrplot(cor_matrix, method = "circle")
+
+#Potential multicollinearity in mrtdistance and longitude, latitude, and storenum
+
+```
+mrtdistance and longitude may be collinear, this could mean we need to remove one of them.
+
+### 5-Number Summaries & Box-Plot
+
+```{r}
+
+#Five-number summaries
+
+tab1 <- data.frame(t(rbind(apply(estate, 2, fivenum))))
+kable(tab1, digits = 4, col.names = c("Min", "1st Qu.", "Median", "3rd Qu.", "Max"))
+
+#Central Tendency Measures
+
+find_mode <- function(x) {
+  u <- unique(x)
+  tab <- tabulate(match(x, u))
+  u[tab == max(tab)]
+}
+
+avg <- apply(estate, 2, mean)
+med <- apply(estate, 2, median)
+mod <- apply(estate, 2, find_mode)
+
+tab2 <- data.frame(t(rbind(avg, med, mod)))
+kable(tab2, digits = 4, col.names = c("Mean", "Median", "Mode"))
+
+#Come back with note of how boxplots are dispersed
+
+#Box-plots for all variables
+
+par(mfrow = c(2, 2))
+
+for (i in seq_along(estate)) {
+  boxplot(estate[, i], main = names(estate)[i])
+}
+
+```
+
+```{r}
+
+#Removing outliers and influential points
+
+outliersmrt <- boxplot(estate$mrtdistance, plot = FALSE)$out
+outliers_removed <- estate[-which(estate$mrtdistance %in% outliersmrt), ]
+
+outlierslat <- boxplot(estate$latitude, plot = FALSE)$out
+outliers_removed <- outliers_removed[-which(estate$latitude %in% outlierslat), ]
+
+outlierslong <- boxplot(estate$longitude, plot = FALSE)$out
+outliers_removed <- outliers_removed[-which(estate$longitude %in% outlierslong), ]
+
+outliersprice <- boxplot(estate$unitprice, plot = FALSE)$out
+outliers_removed <- outliers_removed[-which(estate$unitprice %in% outliersprice), ]
+
+#Finding Cook's Distance for influential points
+
+model <- lm(unitprice ~ txndate + age + mrtdistance + storenum + latitude + longitude, data = estate)
+#find Cook's distance for each observation in the dataset
+cooksD <- cooks.distance(model)
+plot(model, which = 4)
+
+#How to identify influential points using different criteria
+
+influential_obs <- as.numeric(names(cooksD)[(cooksD > (2*(6+1)/337))])
+#influential_obs1 <- as.numeric(names(cooksD)[(cooksD > (3 * mean(cooksD)))])
+#influential_obs2 <- as.numeric(names(cooksD)[(cooksD > 1)])
+
+#New data frame with influential observations removed
+outliers_removed <- outliers_removed[-influential_obs, ]
+
+```
+
+We could remove outliers and influential points through the code that checks for and removes outliers and influential points making our original data set go from 414 observations to 334 observations. However, we will stick with the original dataset for the rest of this project.
+
+## d) 
+
+There are several possible violations of regression assumptions that can occur in our data set: 
+- We could have non-linearity violation, if there is no linear relationship between our dependent variable unitprice, and the rest of the independent variables. We will be able to detect that by by looking at the residual plot. 
+- We could have Heteroscedasticity in our data where the variance of the residuals varies across the data.
+- Multicollinearity can occurs in our data if we would have at least two independent variables highly correlated in different regression models. So far this could be an issue since mrtdistance and longitude correlations were larger than the absolute value of 0.8. In addtion, the pairs matrix shows potential linear relationships for some of the variables.  
+- Autocorrelation will occur in our data when the residuals in our different models are highly correlated over time which respectively is between the years 2012-2014.
+- Outliers: we can already see from the boxplots that we have outliers in our data in different variables such as unitprice, latitude, longitude, mrtdistance. This occurs when we have data points that are significantly different from other observation in our data set. 
+- Non-normality will happen when the residuals in ours regression model are not normally distributed.
+
+# Problem 3
+
+```{r}
+
+m1 <- lm(unitprice ~ txndate + age + mrtdistance + storenum + latitude + longitude, data = estate)
+
+par(mfrow = c(2, 2))
+plot(m1)
+
+summary(m1)
+
+```
+## a)
+
+All of the variables are statistically significant to the model except for longitude. All of the variables make sense realistically and have economic significance except for potentially longitude. Unit price increasing as transaction date increases makes sense. Increased age devaluing the house makes sense. Being far from an MRT station makes sense in devaluing the house. An increase in number of convenience stores nearby makes sense in raising the value of a house. A good latitude and longitude (location in general) also might affect unit price. Though it doesn't make economic sense to drop longitude as location does play a part in house value and latitude is only one part of understanding the location on the globe I feel that it should be dropped given the nature of the data. After doing research of the average location of one of these houses, I found that they were all mostly concentrated in a neighborhood on the east oceanfront of Taiwan, and that moving laterally would put one closer or further from the ocean while moving along the longitude would be simply moving along the coast. I feel that because of this, latitude has precedence, and additionally, our correlation matrix table from earlier showed that longitude and mrtdistance might be collinear meaning that we choose to drop longitude. 
+
+Interpretation of each variable is as follows:
+- As transaction date (txndate) increases by one year, the unit price per square unit increases by 5.146 dollars.
+- As the age of the house increases by one year, the unit price per square unit decreases by 0.2697 dollars.
+- As the distance from the MRT station increases by one unit, the unit price per square unit decreases by 0.00488 dollars.
+- As the number of convenience stores nearby increases by one store, the unit price per square unit increases by 1.133 dollars.
+- As latitude increases by one unit, the unit price per square unit increases by 225.5 dollars.
+- As longitude increases by one unit, the unit price per square unit decreases by 12.42 dollars.
+
+## b)
+
+Residual vs Fitted Plot: As we can see in the graph, the red line lines up perfectly with the red line, which we can assume that the linearity seems to hold reasonably well and the linear regression model is a good fit for the data. Besides, the spread of the residuals seems to be randomly scattering, which also suggests that there is no systematic bias in the prediction of the model and providing a good estimate of the relationship between the dependent variables and the independent variables. 
+
+Normal Q-Q Plot: The plot indicates that the data is normally distributed due to all the points plotted perfectly lies on the straight line. It helps the implication for statistical inference and modeling under the assumption of normality of the data.
+
+Scale-Location Plot: Since the plot shows a horizontal red line that is closer to 0, we can assume that there is no transformation needed for now, and the data is approximately normally distributed. 
+
+Residual vs Leverage Plot: According to the plot, the spread of standardized residuals seems to be decreasing, which indicates a possible heteroskedasticity. With a few high leverages in the plot, we can suggest that there might be potentially influential observations that might affect our regression. Hence, we can look at the cook’s distance to measure the effect of deleting a point. In this case, we can see that there is no points outside the dotted line have high influence.
+
+# Problem 4
+
+```{r}
+
+vif(m1)
+
+```
+
+Since all of the VIF values are between 1-5, they are at acceptable values and thus we do not need to remove any variables thus far.
+
+# Problem 5
+
+```{r}
+
+summary(m1)
+ss <- regsubsets(unitprice ~ txndate + age + mrtdistance + storenum + latitude + longitude, data = estate, method=c("exhaustive"),nbest=1)
+subsets(ss,statistic="cp",legend=F,main="Mallows CP",col="steelblue4")
+
+mallowsum <- summaryHH(ss)
+mallowsum[order(mallowsum$cp),]
+
+#New Model
+
+m2 <- lm(unitprice ~ txndate + age + mrtdistance + storenum + latitude, data = estate)
+summary(m2)
+
+```
+
+The best model m2 would drop the longitude variable. Though economically it may be confusing, I feel that my 3a explanation is a good take on why we should drop it.
+
+# Problem 6
+
+```{r}
+
+plot(m2, which = 1)
+
+```
+
+The data is centered around y=0 and there are no trends in the data. The plot is randomly distributed implying that we have variance = 0 and thus homoskedasticity.
+
+# Problem 7
+
+```{r}
+
+resettest(m2, power = 2)
+
+```
+
+With a p-value of 2.2e-16 we reject the null hypothesis that there are no omitted variables. We need to explain the model better meaning that there could terms missing or misspecified and our m2 is not the best possible model.
+
+# Problem 8 
+
+First step: We need to check the scatterplot to see if there is a definite pattern. Looking at the problem 6 scatterplot, we see that there is no trend or patterns in the data. This means that there may not be heteroskedasticity and that our data is homoskedastic. We can also look at the individual independent variables vs residuals. However, we will confirm using BP, White, and GQ test. According to our RESET test from problem 7, m2 is not the best possible model as a linear function as it could be missing terms with higher powers meaning there is probably more than just a linear relationship between the independent variables and the error term. Thus we should run the White test. 
+
+```{r}
+
+#Scatterplot of fitted vs residuals
+plot(fitted(m2), resid(m2))
+
+#Scatterplots of independent vs. residuals for each independent variable
+
+attach(estate)
+
+par(mfrow = c(2, 2))
+
+plot(txndate,m2$residuals,xlab="txndate", ylab="Residuals",pch=20)
+abline(h=0,col="red", lwd=2)
+plot(age,m2$residuals,xlab="age", ylab="Residuals",pch=20)
+abline(h=0,col="red", lwd=2)
+plot(mrtdistance,m2$residuals,xlab="mrtdistance", ylab="Residuals",pch=20)
+abline(h=0,col="red", lwd=2)
+plot(storenum,m2$residuals,xlab="storenum", ylab="Residuals",pch=20)
+abline(h=0,col="red", lwd=2)
+plot(latitude,m2$residuals,xlab="latitude", ylab="Residuals",pch=20)
+abline(h=0,col="red", lwd=2)
+
+```
+
+```{r}
+
+#BP test short way
+bptest(m2) 
+
+#White test
+alpha <- 0.05
+ressq <- resid(m2)^2
+# The test equation:
+modres <- lm(ressq~(txndate+I(txndate^2))+(age+I(age^2))+(mrtdistance+I(mrtdistance^2))+(storenum+I(storenum^2))+(latitude+I(latitude^2)))
+summary(modres)
+N <- nobs(modres)
+gmodres <- glance(modres)
+S <- gmodres$df 
+chisqcr <- qchisq(1-alpha, S-1)
+Rsqres <- gmodres$r.squared
+chisq <- N*Rsqres
+pval2 <- 1-pchisq(chisq,S-1)
+print(pval2)
+
+#GQ test
+
+gqtest(m2, point = 0.5, alternative = "greater", order.by = txndate) #heteroskedastic
+gqtest(m2, point = 0.5, alternative = "greater", order.by = age) 
+gqtest(m2, point = 0.5, alternative = "greater", order.by = mrtdistance) 
+gqtest(m2, point = 0.5, alternative = "greater", order.by = storenum) 
+gqtest(m2, point = 0.5, alternative = "greater", order.by = latitude) #heteroskedastic
+
+gqtest(m1, point = 0.5)
+gqtest(m2, point = 0.5)
+
+# Robust White Standard Errors 
+cov1 = vcovHC(m1, type="HC1")
+robust_m1 = coeftest(m1, vcov.=cov1)
+kable(tidy(robust_m1))
+
+#Longitude is still statistically insignificant after using robust standard errors
+
+```
+
+The BP test gives a p-value of 0.33 but we have to keep in mind that the RESET test said terms might be missing, thus we also use the White test. The White test gives a p-value of 0.357025 meaning we fail to reject the null hypothesis that our data is not heteroskedastic, showing our data is homoskedastic. In addition, looking at our scatterplot of fitted vs residuals shows that our data is homoskedastic as it remains randomly scattered around 0 for the most part. Though our gqtest stated that for m1 and m2 our data was heteroskedastic, after correcting for m1 via white robust standard errors we find that longitude is still statistically insignificant. I believe that our data, as shown by the scatterplots and White test, is homoskedastic.  
+
+# Problem 9
+
+```{r}
+
+#Scatterplots of independent vs dependent:
+
+par(mfrow = c(2,2))
+
+for (i in 1:6) {
+  plot(estate[, i], unitprice, main = c("Scatterplot of ", names(estate)[i], " vs. unitprice"))
+}
+
+```
+
+```{r}
+tmrtdistance <- log(mrtdistance)
+tunitprice <- log(unitprice)
+ttxndate <- log(txndate)
+tage <- log(age)
+tstorenum <- log(storenum)
+tlatitude <- log(latitude)
+
+m3 <- lm(unitprice ~ txndate+age+tmrtdistance+storenum+latitude)
+summary(m3)
+par(mfrow = c(2,2))
+plot(m3)
+
+ss <- regsubsets(unitprice ~ txndate+age+tmrtdistance+storenum+latitude, data = estate, method=c("exhaustive"),nbest=2)
+subsets(ss,statistic="cp",legend=F,main="Mallows CP",col="steelblue4")
+
+mallowsum <- summaryHH(ss)
+mallowsum[order(mallowsum$cp),]
+
+bptest(m3)
+resettest(m3, power = 2)
+plot(m3, which = 1)
+
+```
+
+Taking the RESET test into account we may be missing variables. It will not be any interaction variables since we do not have any categorical variables. Looking at our scatterplots of independent variables vs dependent variable and White results I could potentially need to transform any of my variables to account for heteroskedasticity and/or we will need to work on adding terms with the second power; I will probably log transform mrtdistance since the residuals plot of just mrtdistance looks as though it still has a non-linear trend so we want to make it linear. storenum is not statistically significant anymore, however it has a p-value of 0.0592 and it is still economically significant so we will keep it.
+
+The model we will use after Problem 9 is m3. m3 regresses txndate, age, transformed mrtdistance, storenum, and latitude. After using the RESET test outcome and looking at the scatterplots of independent variables vs the dependent variables we've found that we should transform mrtdistance to tmrtdistance. This is because of the reasoning above that I chose to log transform it. The model m3 with mrtdistance transformed to log(mrtdistance) is the new best model with it satisfying the BPtest and RESET test and having a comparable cp of 6 compared to m2's 5.065395 and a better Adjusted R^2 of 0.648 compared to m2's 0.5771. The fitted vs. residuals plot of the model looks better as well.
+
+Interpretation of each variable is as follows:
+- As transaction date (txndate) increases by one year, the unit price per square unit increases by 6.558 dollars.
+- As the age of the house increases by one year, the unit price per square unit decreases by 0.2307 dollars.
+- The new interpretation of tmrtdistance is for every 1% increase in MRT station distance from the house, the house unit price decreases by 0.06828 dollars. This is found by the tmrtdistance coefficient divided by 100.
+- As the number of convenience stores nearby increases by one year, the unit price per square unit increases by 0.3618 dollars.
+- As latitude increases by one unit, the unit price per square unit increases by 285.8 dollars.
+
+# Problem 10
+
+Overall, we believe that our variables: transaction date, age of the house, transformed distance to the nearest MRT station (tmrtdistance), the number of convenience stores in the area, and latitude, do have an impact on the unit price per area. According to our analysis, we found the data is mostly reliable and that all variables except for longitude have statistical and economical significance. The possible violations of our regression assumptions are proven not present throughout different statistical tests. We find out that the regression model excluding longitude and with a transformed mrtdistance (m3) provides a better prediction in comparison to the existing model (m1) through the AIC test and is comparable to the m2 test in test statistics plus it passes the RESET test. Therefore, we conclude that without the longitude and with a transformed mrtdistance, tmrtdistance, the model provides a better predictive power, goodness of fit, and interpretability. The White and BP tests confirm homoskedasticity as do the scatterplots. The homoskedasticity suggests our data are also unbiased and sufficient which gives out a better accuracy to our prediction. Hence, by analyzing our m3 model, we predict that as the transaction date, the number of convenience stores nearby, and latitude increase, the house value will rise. On the other hand, we can also suggest that an increase in the distance from an MRT station and age of the house will devalue the house.

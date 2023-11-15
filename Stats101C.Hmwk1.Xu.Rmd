@@ -1,0 +1,404 @@
+---
+title: "Stats101C Homework 1"
+author: "Richard Xu - 505682325"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question 1
+
+### a)
+
+```{r}
+
+#importing relevant packages
+library(ggplot2)
+library(ggfortify)
+library(knitr)
+library(kableExtra)
+
+#importing the data
+train <- read.csv("TrainingHW1Data.csv")[, -1]
+test <- read.csv("TestingHW1Data.csv")[, -1] 
+
+```
+
+```{r}
+
+#checking dimensions
+dim(train)
+dim(test)
+
+```
+
+The dimensions of both the training and testing data set are 201 rows by 2 columns. 
+
+### b)
+
+Model 1:
+
+```{r}
+
+m1 <- lm(y~x, data = train)
+summary(m1)
+
+autoplot(m1)
+
+```
+
+Model 2:
+
+```{r}
+
+m2 <- lm(y~poly(x,2), data = train)
+summary(m2)
+
+autoplot(m2)
+
+```
+
+Model 3:
+
+```{r}
+
+m3 <- lm(y~poly(x,3), data = train)
+summary(m3)
+
+autoplot(m3)
+
+```
+
+Model 4:
+
+```{r}
+
+m4 <- lm(y~poly(x,4), data = train)
+summary(m4)
+
+autoplot(m4)
+
+```
+
+Model 5:
+
+```{r}
+
+m5 <- lm(y~poly(x,5), data = train)
+summary(m5)
+
+autoplot(m5)
+
+```
+
+```{r}
+
+#Generating training MSE, R-squared, Adj.R-squared, AIC, BIC
+
+MSEs.train <- c(sum(m1$residuals^2)/201,sum(m2$residuals^2)/201,sum(m3$residuals^2)/201,sum(m4$residuals^2)/201,sum(m5$residuals^2)/201)
+r2.train <- c(summary(m1)$r.squared,summary(m2)$r.squared,summary(m3)$r.squared,summary(m4)$r.squared,summary(m5)$r.squared)
+r2aj.train <- c(summary(m1)$adj.r.squared,summary(m2)$adj.r.squared,summary(m3)$adj.r.squared,summary(m4)$adj.r.squared,summary(m5)$adj.r.squared)
+AIC.train <- c(AIC(m1),AIC(m2),AIC(m3),AIC(m4),AIC(m5))
+BIC.train <- c(AIC(m1,k=length(train$y)),AIC(m2,k=length(train$y)),AIC(m3,k=length(train$y)),AIC(m4,k=length(train$y)),AIC(m5,k=length(train$y)))
+
+#Generating table
+
+tab1 <- cbind(MSEs.train, r2.train, r2aj.train, AIC.train, BIC.train)
+colnames(tab1) <- c("MSE", "R-squared", "Adj. R-squared", "AIC", "BIC")
+row.names(tab1) <- c("Model 1", "Model 2", "Model 3", "Model 4", "Model 5")
+
+tab1
+
+#Nicer table
+
+# tab1 %>%
+# kbl(caption = "Values by Model #") %>%
+# kable_classic(full_width = F, html_font = "Cambria")
+
+```
+
+### c)
+
+Creating ggplots:
+
+```{r}
+
+tab1 <- data.frame(tab1)
+tab1$model.number <- cbind(1:5)
+tab1$type <- cbind(c("train", "train", "train", "train", "train"))
+
+#ggplots
+
+#ggplot of model # vs. MSE
+ggplot(tab1, aes(model.number, MSE, color=type))+ggtitle("Comparing the MSEs of the Five Models")+
+  geom_point(shape=20,size=6)
+
+#ggplot of model # vs. R-squared
+ggplot(tab1, aes(model.number, R.squared, color=type))+ggtitle("Comparing the R-Squared of the Five Models")+
+  geom_point(shape=20,size=6)
+
+#ggplot of model # vs. Adj. R-squared
+ggplot(tab1, aes(model.number, Adj..R.squared, color=type))+ggtitle("Comparing the Adj.R-Squared of the Five Models")+
+  geom_point(shape=20,size=6)
+
+#ggplot of model # vs. AIC
+ggplot(tab1, aes(model.number, AIC, color=type))+ggtitle("Comparing AICs of the Five Models")+
+  geom_point(shape=20,size=6)
+
+#ggplot of model # vs. BIC
+ggplot(tab1, aes(model.number, BIC, color=type))+ggtitle("Comparing BICs of the Five Models")+
+  geom_point(shape=20,size=6)
+
+```
+
+In the model # vs MSE graph, the best model would be 5 since it has the lowest MSE. In the model # vs R-squared graph, the best model would be 5 since it has the highest R-squared. In the model # vs Adj.R-squared graph the best model would be 3 since it has the highest Adj.R-squared. In the model # vs. AIC graph the best model would again be 3 since it has the lowest AIC. And finally, in the model # vs. BIC graph the best model would be 1 since it has the lowest BIC. 
+
+### d)
+
+Finding Partial Slopes:
+
+```{r}
+
+#Model 5 Best according to MSE
+
+coefficients(m5) #these are the partial slopes of model 5
+
+```
+
+```{r}
+
+#Model 5 Best according to R-squared
+
+coefficients(m5) #these are the partial slopes of model 5
+
+```
+
+```{r}
+
+#Model 3 Best according to Adj.R-squared
+
+coefficients(m3) #these are the partial slopes of model 3
+
+```
+
+```{r}
+
+#Model 3 Best according to AIC
+
+coefficients(m3) #these are the partial slopes of model 3
+
+```
+
+```{r}
+
+#Model 1 Best according to BIC
+
+coefficients(m1) #these are the partial slopes of model 1
+
+```
+The partial slopes of each best model are as listed above.
+
+### e) compare each of the sub models to 5 in pairs 
+
+Running Partial F-Tests:
+
+```{r}
+
+#model 1 and 2
+anova(m1, m2)
+
+#model 2 and 3
+anova(m2, m3)
+
+#model 3 and 4
+anova(m3, m4)
+
+#model 4 and 5
+anova(m4, m5)
+
+#3 is the best model since the F-stat is still significant from model 2 to 3 but not from model 3 to 4.
+
+#model 3 and 5 to verify that 3 is the best model
+anova(m3, m5)
+
+```
+
+According to the partial F-tests the best model is model 3. From the partial F-test of model 2 to model 3, the null hypothesis that "an additional variable is not statistically significant" is rejected, meaning the additional variable is statistically significant. However, when partial F-testing model 3 and model 4 together, the null hypothesis that "an additional variable is not statistically significant" fails to be rejected meaning that variable was not statistically significant meaning that model 3 is the best. A partial F-test between models 3 and 5 confirms this.
+
+### f) 
+
+Predicting values:
+
+```{r}
+
+#model 1
+m1predicted <- predict(m1, newdata = test)
+#Testing MSE
+m1MSE <- sum(test$y - m1predicted)^2 / 201
+m1MSE
+
+#model 2
+m2predicted <- predict(m2, newdata = test)
+#Testing MSE
+m2MSE <- sum(test$y - m2predicted)^2 / 201
+m2MSE
+
+#model 3
+m3predicted <- predict(m3, newdata = test)
+#Testing MSE
+m3MSE <- sum(test$y - m3predicted)^2 / 201
+m3MSE
+
+#model 4
+m4predicted <- predict(m4, newdata = test)
+#Testing MSE
+m4MSE <- sum(test$y - m4predicted)^2 / 201
+m4MSE
+
+#model 5
+m5predicted <- predict(m5, newdata = test)
+#Testing MSE
+m5MSE <- sum(test$y - m5predicted)^2 / 201
+m5MSE
+
+#Organizing data
+MSE.Data <- data.frame(c("Model1","Model2","Model3","Model4","Model5"),c(tab1$MSE[1:5],m1MSE,m2MSE,m3MSE,m4MSE,m5MSE),c("Train","Train","Train","Train","Train","Test","Test","Test","Test","Test"))
+colnames(MSE.Data) <- c("Model", "MSE", "type")
+
+```
+
+### g)
+
+```{r}
+
+#Plotting testing and training MSEs for all 5 models
+ggplot(MSE.Data, aes(Model, MSE, color=type))+ggtitle("Comparing Training and Testing MSE's of the Five Models")+geom_point(shape=20,size=6)
+
+```
+There are massive differences between training MSE and testing MSE for all 5 models. There is roughly a 70 million difference between training MSE and testing MSE for model 1, with the training data MSE being much larger. There is roughly a 70 million difference between training MSE and testing MSE for model 2, with the training data MSE being much larger. There is roughly a 70 million difference between training MSE and testing MSE for model 3, with the training data MSE being much larger. There is roughly a 70 million difference between training MSE and testing MSE for model 4, with the training data MSE being much larger. There is roughly a 70 million difference between training MSE and testing MSE for model 5, with the training data MSE being much larger. 
+
+I would say that based off my answers to part b and c I believe that Model 3 is the true model used to create data since there are no marginal differences in testing MSE and that 3 has the best Adjusted R-squared meaning it is adjusted for model complexity. Model 3 also has the lowest AIC. Additionally, if we look at our partial f-tests then model 3 was the best model since it is statistically significant when adding or removing a variable.
+
+# Question 2
+
+### a)
+
+```{r}
+
+heart <- read.csv("heartdisease.csv")
+
+```
+
+Questions that you could answer with this data are:
+1. How likely is a female with 110 resting bpm, who is self-employed, and smokes to have heart disease? (prediction)
+
+2. What is the average glucose level of a male with a 30.6 bmi, is a former smoker, is married, and lives in a rural area? (prediction)
+
+3. What effect would an increase of 10 for max heart rate have on your risk of having heart disease? (parameter)
+
+4. What difference does having hypertension have on your risk of having heart disease? (parameter)
+
+### b) 
+
+I will answer question 4:
+
+I will first replace all yes and no's in categorical variables with 1's and 0's. 1 = yes, and 0 = no. 
+
+```{r}
+
+heart$hypertension <- ifelse(heart$hypertension == "Yes", 1, 0)
+heart$HeartDisease <- ifelse(heart$HeartDisease == "Yes", 1, 0)
+
+```
+
+I now can create a model using the variables: HeartDisease, hypertension, avg_glucose_level, and RestingBP with the latter three being predictors.
+
+```{r}
+
+hmodel <- lm(data = heart, HeartDisease ~ hypertension+avg_glucose_level+RestingBP)
+summary(hmodel)
+
+```
+
+According to the model, having hypertension increases your risk of heart disease by 21.29237 percent. Since HeartDisease can only be 0 or 1 this model can be viewed as estimating a percentage between 0 and 1 as to how likely you are to have HeartDisease based off the chosen variables.
+
+# Question 3
+
+### a)
+
+```{r}
+
+#Contingency table stroke vs. smoking_status
+contab <- table(heart$stroke, heart$smoking_status)
+contab
+prop.table(contab)
+
+```
+
+### b)
+
+Making stacked bar charts:
+
+```{r}
+
+attach(heart)
+
+heart$hypertension <- ifelse(heart$hypertension == 1, "Yes", "No")
+heart$HeartDisease <- ifelse(heart$HeartDisease == 1, "Yes", "No")
+
+#stacked bar chart for stroke vs. smoking_status
+
+#Bar chart 1
+ggplot(heart, aes(x = stroke, fill = smoking_status)) + geom_bar()
+
+#Bar chart 2
+ggplot(heart, aes(x = smoking_status, fill = stroke)) + geom_bar()
+
+
+```
+
+### c)
+
+When looking at the stacked bar charts, it does not appear as though variables smoking_status and stroke are correlated. For the most part, regardless of smoking status it appears as though the number of people who have a stroke is pretty consistent. In fact, there are more people who've had a stroke yet never smoked!
+
+### d)
+
+```{r}
+
+chisq <- chisq.test(contab)
+chisq
+
+```
+The p-value is significant since it is below 0.05. This means that we reject the null hypothesis that there is not a relationship between the two variables. That means the two of them are related.
+
+# Question 4
+
+```{r}
+
+#A
+A <- 537.1 - 519.8
+A
+
+#E
+E <- A / 2 #2 for df between groups
+E
+
+#F
+f <- 519.8 / 212 #212 df within groups
+f
+
+#G
+G <- E / f
+G
+
+#H
+H <- pf(G, 1, 213, lower.tail = FALSE)
+H
+
+```
+
+A is 17.3 sum of squares. B is 2 df, C is 212 df, D is 214 df. E is 8.65 MSE. F is 2.452 MSE. G is 3.528 F-stat. H is 0.061 p-value.
+

@@ -1,0 +1,268 @@
+---
+title: "Stats101C Hmwk 5"
+author: "Richard Xu - 505682325"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data Importing
+```{r}
+
+births <- read.csv("birthsnewone.csv")[, -1]
+names(births)[38] <- "weight" #renaming for ease
+
+#splitting data into train and testing
+set.seed(123456789)
+i = 1:dim(births)[1]
+i.train <- sample(i,5000,replace=FALSE)
+B.train = births[i.train, ]
+B.test = births[-i.train, ]
+
+```
+
+# a)
+
+### The Normal Linear Model (Least Squared Errors):
+
+```{r}
+
+m1 <- lm(data = B.train, weight~.)
+summary(m1)
+
+#finding test mse
+test_mse <- mean((B.test$weight - predict(m1, newdata = B.test))^2) #testing mse
+#alternatively could make lm model on B.test and square the Residual Squared Errors
+test_mse
+
+```
+Based off the summary output for the training dataset:
+$$ MSE = 137.3^2 = 18,851.29$$
+
+To find MSE for the testing dataset, I went about the route of taking the observed values minus the predicted value of my m1 on the B.test data, squaring it, and then taking the mean.
+$$ MSE = 19266.6$$
+The testing MSE is higher than the training MSE. My significant predictors for this model m1 are: Plurality.of.birth, Gender, RaceWhite, Date.LBirth, Month.LBirth, Weeks, Birth.weight.group, Month.Term, SmokerNo, and Wt.Gain.
+
+# b)
+
+### Stepwise Backwards Regression via BIC:
+
+```{r}
+
+library(leaps)
+
+X <- model.matrix(weight ~ ., data = B.train)[, -38]
+y <- B.train$weight
+
+out.b <- regsubsets(X,y,method="backward")
+summary(out.b)
+
+```
+Based on the backwards stepwise regression on the training data based of BIC, the best predictors are: Plurality.of.birth, RaceWhite (Race), Age.of.mother, Date.LBirth, Month.LBirth, Weeks, Birth.weight.group, SmokerNo (Smoker), and Wt.Gain.
+
+### Rebuilding model with better variables:
+
+```{r}
+
+m2 <- lm(data = B.train, weight~Plurality.of.birth+Race+Age.of.mother+Date.LBirth+Month.LBirth+Weeks+Birth.weight.group+Smoker+Wt.Gain)
+summary(m2)
+
+#finding test mse
+test2_mse <- mean((B.test$weight - predict(m2, newdata = B.test))^2) #testing mse
+#alternatively could make lm model on B.test and square the Residual Squared Errors
+test2_mse
+
+```
+Based off the summary output for the training dataset:
+$$ MSE = 137.3^2 = 18,851.29$$
+To find MSE for the testing dataset, I went about the route of taking the observed values minus the predicted value of my m1 on the B.test data, squaring it, and then taking the mean.
+$$ MSE = 19273.69$$
+I believe that the model is not the best yet.
+
+# c)
+
+### Plot ratio of the size of the coefficients for Ridge Regression to the size of the coefficients for LS Change vs. Lamda
+
+```{r}
+
+library(glmnet)
+library(caret)
+
+s.B.train <- B.train
+s.B.train[, -c(1,3,4,5,13,14,15,16,22,27,28,29,30,31,32,33,35,38)] <- scale(B.train[, -c(1,3,4,5,13,14,15,16,22,27,28,29,30,31,32,33,35,38)])
+
+s.B.test <- B.test
+s.B.test[, -c(1,3,4,5,13,14,15,16,22,27,28,29,30,31,32,33,35)] <- scale(B.test[, -c(1,3,4,5,13,14,15,16,22,27,28,29,30,31,32,33,35)])
+
+# Fit Least Squares Regression
+ls_model <- lm(weight~., data = s.B.train)
+coeffls <- ls_model$coefficients
+
+# Fit Ridge Regression for each lambda
+
+#lamdas
+i=seq(10,-2,length=100)
+lambda_values=10^i
+length(lambda_values)
+
+b.t <- na.omit(births) #removes rows with missing values
+x <- model.matrix(weight~.,data=b.t) #turns factors into coded numerical values
+y <- b.t$weight
+
+ridge_model <- glmnet(x, y, alpha = 0, lambda = lambda_values)
+ridge_coefficients <- coef(ridge_model)
+
+# Calculate L2 norm of coefficients for both LS and Ridge
+ls_norm <- sqrt(sum(coeffls, na.rm = TRUE)^2) #to get rid of the NA's? I don't know proper conduct
+
+#to calculate l2 for all lambdas
+my.l2 <- function(betas){ #calculate l2 norm for all in ridge_model
+ sqrt(sum(betas^2))
+  }
+ 
+ls2.1 <- c() #store vector
+
+for (i in 1:100){ 
+   ls2.1 <- c(ls2.1, my.l2(ridge_coefficients[-c(1,2),i]))
+   }
+
+# Calculate the ratio of L2 norms
+ratio <- ls2.1 / ls_norm
+
+# Plot the results
+qplot(lambda_values, ratio, xlab = "Lambda", ylab = "Ratio of Ridge L2 norm to LS L2 norm", main = "Ratio of Ridge to L2 Ratio vs. Lambda")
+
+```
+
+# d)
+
+### Ridge Regression:
+
+```{r}
+
+# births.t <- transform(births,lweight=log(weight))
+# births.t <- subset(births.t ,select=-c(weight))
+
+births.t <- births
+
+#creating lambda
+i=seq(10,-2,length=100)
+lambda.v=10^i
+length(lambda.v)
+
+#cleaning
+births.t2 <- na.omit(births.t) #removes rows with missing values
+# x <- model.matrix(lweight~.,data=births.t2) #turns factors into coded numerical values
+# y <- births.t2$lweight
+
+x <- model.matrix(weight~.,data=births.t2) #turns factors into coded numerical values
+y <- births.t2$weight
+
+#model creating
+library(glmnet)
+model.ridge <- glmnet(x,y,alpha=0, lambda=lambda.v)
+summary(model.ridge)
+plot(model.ridge)
+
+#model interpretation
+coeffs <- coef(model.ridge)
+# coeffs[, 1] #coeffs that correspond to best lambda
+# model.ridge$lambda[1] #largest lambda
+
+#lambda is 1e+10
+sqrt(sum(coeffs[-c(1,2), 1]^2))
+## 1.904377e-11 Norm of the Betas for a very large lambda
+
+#lambda is 0.01
+sqrt(sum(coeffs[-c(1,2),100]^2))
+## 0.184722 Norm of the Betas for a very small lambda
+
+#to calculate l2 for all lambdas
+my.l2 <- function(betas){ #calculate l2 norm for all, #betas as in coefficients 
+ sqrt(sum(betas^2))
+  }
+ 
+ls2 <- c() #store vector
+
+for (i in 1:100){ 
+   ls2 <- c(ls2, my.l2(coeffs[-c(1,2),i]))
+   }
+
+#plotting lambda.v vs. L2 norm
+qplot(lambda.v, ls2)
+
+#want to find best lambda
+cv.output <- cv.glmnet(x,y,alpha=0)
+qplot(log(cv.output$lambda),cv.output$cvsd)
+plot(cv.output)
+
+#do it by using cv.output$lambda.min as it minimizes mean crossvalidation error
+bestlamb.cv <- cv.output$lambda.min
+bestlamb.cv
+
+#check our coefficients
+predict(model.ridge, s=bestlamb.cv, type="coefficients")
+
+```
+Our best lambda would be 59.2054 for this ridge regression model. The variables that survived relative to the context are: Plurality.of.birth, Gender, Race, Weeks, Birth.weight.group, Low.BirthNorm, Mother.MinorityWhite, HISPMOM(HispMomO, HispMomS, HispMomU), HISPDAD(HispDadO, HispDadS, HispDadU), and Smoker(SmokerNo).
+
+# e)
+
+### Lasso Regression:
+
+```{r}
+
+#use the same lambda, matrix, and response vector
+
+#model creating
+model.lasso <- glmnet(x,y,alpha=1, lambda=lambda.v) #1 in alpha means lasso
+summary(model.lasso)
+plot(model.lasso)
+
+#model interpretation
+coeffsL <- coef(model.lasso)
+# coeffs[, 1] #coeffs that correspond to best lambda
+# model.lasso$lambda[1] #largest lambda
+
+#lambda is 1e+10
+sqrt(abs(coeffsL[-c(1,2), 1]))
+## 1.904377e-11 Norm of the Betas for a very large lambda
+
+#lambda is 0.01
+sqrt(abs(coeffsL[-c(1,2), 100]))
+## 0.184722 Norm of the Betas for a very small lambda
+
+my.l1 <- function(betas){ #calculate l1 norm for all lambdas
+ sum(abs(betas))
+  }
+ 
+ls1 <- c()
+
+ for(i in 1:100){ 
+   ls1 <- c(ls1, my.l1(coeffsL[-c(1,2),i]))
+ }
+
+qplot(lambda.v,ls1)
+
+#want to find best lambda
+cv.outputL <- cv.glmnet(x,y,alpha=1)
+qplot(log(cv.outputL$lambda),cv.outputL$cvsd)
+plot(cv.outputL)
+
+#do it by using cv.output$lambda.min as it minimizes mean crossvalidation error
+bestlamb.cvL <- cv.outputL$lambda.min
+bestlamb.cvL
+
+#check our coefficients
+predict(model.lasso, s=bestlamb.cvL, type="coefficients")
+
+```
+
+My best lambda for lasso regression is 0.9649005. The variables listed above that are not . or near 0 given the context are the variables that have survived. Realistically, only ~9 of them are good.
+
+# Discussion:
+
+The stepwise backwards via BIC has the smallest amount of predictors, followed by the lasso regression then the ridge regression. I would say that our stepwise had the most amount of bias since it removed the most variables followed by lasso, and then ridge. I would say the stepwise was the least flexible followed by ridge, then finally lasso. This is because lasso's penalty term allowed for the removal of irrelevant variables. 
