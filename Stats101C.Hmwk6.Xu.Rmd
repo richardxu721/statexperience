@@ -1,0 +1,392 @@
+---
+title: "Stats101C Hmwk 6"
+author: "Richard Xu - 505682325"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Problem 1:
+
+```{r}
+
+library(glmnet)
+library(ggplot2)
+library(corrplot)
+library(car)
+library(pls)
+library(splines)
+library(foreach)
+library(gam)
+library(rpart)
+library(tree)
+
+college <- read.csv("CollegeF23.csv")
+
+#split 70-30 training, testing
+set.seed(1128)
+index <- sample(nrow(college), 2100,replace = FALSE)
+c.train <- college[index,]
+c.test <- college[-index,]
+dim(c.train)
+dim(c.test)
+
+```
+
+### a)
+
+Fitting a multiple linear model:
+
+```{r}
+
+m1 <- lm(Expend~., data = c.train) 
+summary(m1)
+
+#Finding the training MSE
+
+m1trainMSE <- sum(m1$residuals^2)/2100
+m1trainMSE
+
+#Finding the testing MSE
+
+y.hat.m1 <- predict(m1, newdata = c.test)
+m1testMSE <- sum((c.test$Expend-y.hat.m1)^2)/900
+m1testMSE
+
+```
+The training and testing MSEs are 9701589 and 8779286 respectively.
+
+### b)
+
+Fitting a Ridge regression model:
+
+```{r}
+
+#lamdas
+i=seq(10,-2,length=100)
+lambda.v=10^i
+length(lambda.v)
+
+#na omit dataset
+c.train2 <- na.omit(c.train)
+c.test2 <- na.omit(c.test)
+x <- model.matrix(Expend~.,data=c.train2) #turns factors into coded numerical values
+y <- c.train2$Expend
+
+#model creation for checking
+model.ridge <- glmnet(x,y,alpha=0, lambda=lambda.v)
+summary(model.ridge)
+plot(model.ridge)
+
+#want to find best lambda
+cv.output <- cv.glmnet(x,y,alpha=0)
+qplot(log(cv.output$lambda),cv.output$cvsd)
+plot(cv.output)
+
+#best lambda via cross validation
+bestlamb.cv <- cv.output$lambda.min
+bestlamb.cv
+
+#calculating training MSE
+train.predictions <- predict(model.ridge, s=bestlamb.cv, newx = as.matrix(c.train2)) #need s because only using one lambda
+ridgetrainMSE <- sum((train.predictions - c.train2$Expend)^2)/2100
+ridgetrainMSE
+
+#Calculating testing MSE
+test.predictions <- predict(model.ridge, s=bestlamb.cv, newx = as.matrix(c.test2))
+ridgetestMSE <- sum((test.predictions - c.test2$Expend)^2)/900
+ridgetestMSE
+
+```
+
+We used the best lambda 366.0804. The ridge regression training and testing MSE's are 8.095327e+12 and 6.915957e+12 respectively. 
+
+### c)
+
+Making a LASSO regression model:
+
+```{r}
+
+#use the same lambda, matrix, and response vector
+
+#model creation for checking
+model.lasso <- glmnet(x,y,alpha=1, lambda=lambda.v)
+summary(model.lasso)
+plot(model.lasso)
+
+#want to find best lambda
+cv.outputlasso <- cv.glmnet(x,y,alpha=1)
+qplot(log(cv.outputlasso$lambda),cv.outputlasso$cvsd)
+plot(cv.outputlasso)
+
+#best lambda via cross validation
+bestlamblasso.cv <- cv.outputlasso$lambda.min
+bestlamblasso.cv
+
+#calculating training MSE
+train.predictionsl <- predict(model.lasso, s=bestlamblasso.cv, newx = as.matrix(c.train2)) 
+lassotrainMSE <- sum((train.predictionsl - c.train2$Expend)^2)/2100
+lassotrainMSE
+
+#calculating testing MSE
+test.predictionsl <- predict(model.lasso, s=bestlamblasso.cv, newx = as.matrix(c.test2))
+lassotestMSE <- sum((test.predictionsl - c.test2$Expend)^2)/900
+lassotestMSE
+
+#Checking coefficients shrinkage
+coefs <- predict(model.lasso, s=bestlamblasso.cv, type="coefficients")
+coefs
+
+```
+The best lambda is 1.953661. The LASSO training and testing MSE's are 1.481925e+13 and 1.274264e+13 respectively. All of the variables are non-zero post shrinkage.
+
+# Problem 2:
+
+### a)
+
+Fitting a PCR model:
+
+```{r}
+
+#data cleaning
+c.train.t <- transform(c.train,lExpend=log(Expend)) #might not need to do this depending on what you want
+c.train.t <- subset(c.train.t, select=-c(Expend))
+c.train.t$Private <- ifelse(c.train.t$Private == "Yes", 1, 0)
+c.train.t[,-c(1,18)] <- scale(c.train.t[,-c(1,18)]) #scale dataset 
+c.train2.t <- na.omit(c.train.t)
+
+c.test.t <- transform(c.test,lExpend=log(Expend))
+c.test.t <- subset(c.test.t, select=-c(Expend))
+c.test.t$Private <- ifelse(c.test.t$Private == "Yes", 1, 0)
+c.test.t[,-c(1,18)] <- scale(c.test.t[,-c(1,18)]) #scale dataset 
+c.test2.t <- na.omit(c.test.t)
+
+# x = model.matrix(lExpend~.,data=c.train2.t)
+# y = c.train2.t$lExpend
+
+```
+
+```{r}
+
+#plotting correlations
+corr <- round(cor(c.train.t[,c(-18)]),3) #no private or response
+corr
+corrplot(corr)
+vif(m1) #vif of the original linear model
+
+```
+
+```{r}
+
+#making the PCA
+train.out.pc <- princomp(c.train2.t[,-18]) #next time argument "cor = T" will standardize for us
+summary(train.out.pc)
+train.out.pc$loadings #blanks mean 0 contribution
+plot(train.out.pc) #shows how much of variance is covered by each component
+
+```
+
+```{r}
+
+#Actual PCR
+pcr.fit <- pcr(lExpend~.,data=c.train2.t, validation="CV") #can have "scale = TRUE" argument
+summary(pcr.fit)
+
+#checking MSE and choosing best number of components
+selectNcomp(pcr.fit, validation = "CV") #checks best N compositions
+validationplot(pcr.fit, val.type="MSEP") #can reduce from 17 to 14
+
+```
+
+```{r}
+
+#making a PCR model with 14 components
+pcr.fit14 <- pcr(lExpend~.,data=c.train2.t, ncomp=14) #validation argument for CV
+summary(pcr.fit14)
+
+```
+
+```{r}
+
+#Checking training and testing MSE
+train.predictionspcr <- predict(pcr.fit14, newdata = c.train2.t, ncomp = 14) #ncomp for the number of composition model you want to do
+pcrtrainMSE <- sum((train.predictionspcr - c.train2.t$lExpend)^2)/2100
+pcrtrainMSE
+
+#calculating testing MSE
+test.predictionspcr <- predict(pcr.fit14, newdata = c.test2.t, ncomp = 14)
+pcrtestMSE <- sum((test.predictionspcr - c.test2.t$lExpend)^2)/900
+pcrtestMSE
+
+```
+We used a M=14 PCR model, reduced from 17 via cross-validation. I scaled the predictors myself and log transformed the response variable since its distribution was skewed left. The training and testing MSE's of the PCR model are 0.03833221 and 0.04080707 respectively. The amount of variance explained by the 14 components in the X matrix is 0.992422924 or 99.2422924%.
+
+### b)
+
+Making a PLS Model:
+
+```{r}
+
+pls.fit <- plsr(lExpend~., data=c.train2.t, validation = "CV") #has "scale" argument if need be
+summary(pls.fit)
+
+#selecting best Ncomp
+selectNcomp(pls.fit, validation = "CV")
+validationplot(pls.fit,val.type="MSEP")
+
+#model w ncomp = 10 since we use variance 85% as a threshold
+pls.fit10 <- plsr(lExpend~., data=c.train2.t, ncomp=10)
+summary(pls.fit10)
+
+#training MSE
+train.predictionspls <- predict(pls.fit10, newdata = c.train2.t, ncomp = 10) #ncomp for the number of composition model you want to do
+plstrainMSE <- sum((train.predictionspls - c.train2.t$lExpend)^2)/2100
+plstrainMSE
+
+#calculating testing MSE
+test.predictionspls <- predict(pls.fit10, newdata = c.test2.t, ncomp = 10)
+plstestMSE <- sum((test.predictionspls - c.test2.t$lExpend)^2)/900
+plstestMSE
+
+```
+We reduced to a Ncomp = 10 PLS model since we want an 85% varaince explained threshold. I scaled the predictors myself and log transformed the response variable since its distribution was skewed left. The PLS training and testing MSE's are 0.03829635 and 0.04067293 respectively. The amount of variance explained by the 10 components in the X matrix is 86.59%.
+
+# Problem 3:
+
+### a)
+
+Backward Stepwise Regression:
+
+```{r}
+
+mfull <- m1
+bBIC <- step(mfull, direction = "backward", k = log(nrow(c.train)))
+
+```
+The best variables to use according to backward stepwise via BIC is Expend ~ Private + Apps + Accept + Top10perc + Top25perc + P.Undergrad + Outstate + Books + Terminal + S.F.Ratio + Grad.Rate. The sum of squared errors is 3193972990.
+
+### b)
+
+```{r}
+
+gam.11 <- gam(Expend~Private+s(Apps)+s(Accept)+s(Top10perc)+s(Top25perc)+s(P.Undergrad)+s(Outstate)+s(Books)+s(Terminal)+s(S.F.Ratio)+s(Grad.Rate), data = c.train2)
+summary(gam.11)
+
+plot(gam.11,se=T,col="green")
+
+trainpredictiongam <- predict(gam.11, newdata = c.train2)
+gamtrainMSE <- sum((trainpredictiongam - c.train2$Expend)^2)/2100
+gamtrainMSE
+
+```
+The MSE on the training data set is 6659393. Looking at our Component-Wise Additive Plots the variables with the most smooth uncertainty are: P.Undergrad, Accept, Apps, and Books.
+
+### c)
+
+```{r}
+
+testpredictiongam <- predict(gam.11, newdata = c.test2)
+gamtestMSE <- sum((testpredictiongam - c.test2$Expend)^2)/900
+gamtestMSE
+
+```
+The MSE on the testing dataset is 7795592.
+
+### d)
+
+```{r}
+
+predictor_names <- setdiff(names(c.train2), c.train2$Expend)
+c.train2$Private <- ifelse(c.train2$Private == "Yes", 1, 0)
+
+# Plot scatterplots for each predictor vs the response
+
+for (predictor in predictor_names) {
+  plot(c.train2[[predictor]], c.train2$Expend, 
+       xlab = predictor, ylab = "Expend", 
+       main = paste("Scatterplot of", predictor, "vs Expend"))
+}
+
+```
+
+Looking at these scatterplots, there are some variables that do not have a linear relationship with Expend. I would say these are: PHD, Terminal, Top25perc, and S.F. Ratio.
+
+# Problem 4:
+
+We can predict the amount of money expend by college students pretty accurately. There is indeed a big difference in MSEs with lasso and ridge having the highest MSEs, followed by stepwise backwards, the linear, the GAM. Though I did log transform the response variable of the PCR and PLS models, I do believe they are the best since they did dimensional reduction for variables that were collinear.
+
+# Problem 5:
+
+### a)
+
+```{r}
+
+#reading data
+births <- read.csv("better2000births.csv")
+
+#splitting data
+set.seed(1128)
+indexb <- sample(nrow(births), 1000,replace = FALSE)
+b.train <- births[indexb,]
+b.test <- births[-indexb,]
+
+#data cleaning
+b.train <- na.omit(b.train)
+b.test <- na.omit(b.test)
+
+dim(b.train)
+dim(b.test)
+
+```
+
+Creating a tree model:
+
+```{r}
+
+tree.1 <- tree(factor(Premie)~., data=b.train)
+summary(tree.1)
+
+plot(tree.1)
+text(tree.1)
+
+#test predictions and confusion matrix
+treetestpredictions <- predict(tree.1, newdata=b.test, type="class")
+table(treetestpredictions, b.test$Premie)
+mean(treetestpredictions!=b.test$Premie) #misclassification rate
+
+```
+The misclassification rate on the testing data is 0.06212425 or 6.212425%.
+
+### b)
+
+```{r}
+
+cv.treetrain <- cv.tree(tree.1, FUN = prune.misclass)
+cv.treetrain
+plot(cv.treetrain$dev~cv.treetrain$size) #lowest is tree of 3 terminal nodes
+
+pruned.tree.1 <- prune.misclass(tree.1, best=3)
+plot(pruned.tree.1)
+text(pruned.tree.1, pretty = TRUE)
+
+```
+We reduced the tree to one with 3 terminal nodes.
+
+### c)
+
+Both trees do not have smoking status as a potential cause as to whether a birth is premature. Rather for the pruned tree, the most important predictor was weight being less than 97.5 and 80.5 for two separate paths.
+
+### d)
+
+```{r}
+
+#test predictions and confusion matrix
+p.treetestpredictions <- predict(pruned.tree.1, newdata=b.test, type="class")
+table(p.treetestpredictions, b.test$Premie)
+mean(p.treetestpredictions!=b.test$Premie) #misclassification rate
+
+```
+My testing misclassification rate is 0.05711423 or 5.711423%. This is better than the doctor always guessing "Not Premature" with a 9% misclassification rate.
